@@ -7,6 +7,7 @@ import { I18nProvider, useI18n } from './lib/i18n'
 import { AuthProvider, useAuth, useProfile } from './lib/auth'
 import { configMissing } from './lib/supabase'
 import { Alert, Spinner } from './components/ui'
+import { NotifyProvider } from './components/notify'
 import Landing from './pages/Landing'
 import Auth from './pages/Auth'
 import WorkerOnboarding from './pages/WorkerOnboarding'
@@ -43,6 +44,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <NotifyProvider>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
@@ -54,6 +56,7 @@ function App() {
           <Route path="/job/:id" element={<Guard><JobPage /></Guard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </NotifyProvider>
       </BrowserRouter>
     </AuthProvider>
   )

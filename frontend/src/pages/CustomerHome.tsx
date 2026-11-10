@@ -21,13 +21,13 @@ export default function CustomerHome() {
   const go = () => { try { localStorage.setItem('rr-area', String(area)) } catch { /* ignore */ } nav(`/c/workers?cat=${cat}&area=${area}`) }
 
   return (
-    <Screen footer={<Button disabled={!cat || !area} onClick={go}>{t('findWorkers')}</Button>}>
+    <Screen wide footer={<Button disabled={!cat || !area} onClick={go}>{t('findWorkers')}</Button>}>
       <header className="flex items-center gap-3 pt-2">
         <Logo size={40} /><span className="flex-1 text-xl font-extrabold">{t('appName')}</span>
         <LangSwitch /><button aria-label={t('logout')} onClick={() => supabase.auth.signOut()} className="size-12 grid place-items-center"><LogOut className="size-5" /></button>
       </header>
       <h1 className="text-2xl font-bold">{t('whatFix')}</h1>
-      <div className="grid grid-cols-2 gap-4" role="radiogroup">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" role="radiogroup">
         {categories.map((c) => {
           const Icon = tradeIcons[c.slug]; const sel = cat === c.id
           return (
@@ -45,11 +45,11 @@ export default function CustomerHome() {
       {!!jobs.data?.length && (
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-bold">{t('myBookings')}</h2>
-          {jobs.data.map((j) => (
+          <div className="grid gap-3 md:grid-cols-2">{jobs.data.map((j) => (
             <Link key={j.id} to={`/job/${j.id}`}><Card className="flex items-center justify-between gap-2 border-2 hover:border-brand">
               <span className="font-semibold">{nameOf(categories.find((c) => c.id === j.category_id), lang)}</span><StatusBadge status={j.status} />
             </Card></Link>
-          ))}
+          ))}</div>
         </section>
       )}
     </Screen>

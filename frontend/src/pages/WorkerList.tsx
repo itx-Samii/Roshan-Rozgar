@@ -18,7 +18,7 @@ export default function WorkerList() {
   const title = `${nameOf(categories.find((c) => c.id === cat), lang)} · ${nameOf(areas.find((a) => a.id === area), lang)}`
   const rows = (q.data ?? []).filter((w) => w.availability !== 'offline')
   return (
-    <Screen>
+    <Screen wide>
       <TopBar title={title} />
       {q.isLoading && <Spinner />}
       {q.error && <Alert>{tErr(t, errorCode(q.error))}<Button variant="tertiary" onClick={() => q.refetch()}>↻</Button></Alert>}
@@ -28,6 +28,7 @@ export default function WorkerList() {
           <h2 className="text-xl font-bold">{t('noWorkers')}</h2><p className="text-ink-2">{t('noWorkersSub')}</p>
         </Card>
       )}
+      <div className="grid gap-4 md:grid-cols-2">
       {rows.map((w) => (
         <Card key={w.worker_id} className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -41,6 +42,7 @@ export default function WorkerList() {
             : <Button variant="secondary" onClick={() => nav(`/c/worker/${w.worker_id}?cat=${cat}&area=${area}`)}>{t('request')}</Button>}
         </Card>
       ))}
+      </div>
     </Screen>
   )
 }

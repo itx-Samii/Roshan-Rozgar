@@ -46,7 +46,7 @@ export default function WorkerOnboarding() {
       <TopBar title={t('chooseTrade')} back={false} />
       {progress}
       <p className="text-ink-2">{t('chooseTradeSub')}</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {categories.map((c) => {
           const Icon = tradeIcons[c.slug]; const sel = cats.includes(c.id)
           return (

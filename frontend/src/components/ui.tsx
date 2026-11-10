@@ -50,11 +50,13 @@ export function TopBar({ title, back = true, end }: { title: string; back?: bool
   )
 }
 
-export function Screen({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+/** Page shell. `wide` gives laptops/desktops a wider canvas; the action footer stays reachable and centred. */
+export function Screen({ children, footer, wide }: { children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const w = wide ? 'max-w-6xl' : 'max-w-xl'
   return (
-    <div className="min-h-dvh flex flex-col max-w-xl mx-auto">
-      <main className="flex-1 px-6 py-4 flex flex-col gap-5">{children}</main>
-      {footer && <footer className="sticky bottom-0 bg-surface border-t border-muted px-6 py-4 flex flex-col gap-2">{footer}</footer>}
+    <div className={`min-h-dvh flex flex-col ${w} mx-auto w-full`}>
+      <main className="flex-1 px-4 md:px-6 py-4 flex flex-col gap-5">{children}</main>
+      {footer && <footer className="sticky bottom-0 bg-surface/95 backdrop-blur border-t border-muted px-4 md:px-6 py-4"><div className="max-w-xl mx-auto w-full flex flex-col gap-2">{footer}</div></footer>}
     </div>
   )
 }

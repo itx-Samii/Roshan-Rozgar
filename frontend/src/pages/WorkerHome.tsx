@@ -40,9 +40,10 @@ export default function WorkerHome() {
   }
 
   return (
-    <Screen>
+    <Screen wide>
       <TopBar title={profile.data?.display_name ?? ''} back={false} end={<><LangSwitch /><button aria-label={t('logout')} onClick={() => supabase.auth.signOut()} className="size-12 grid place-items-center"><LogOut className="size-5" /></button></>} />
-      <section aria-labelledby="st" className="flex flex-col gap-3">
+      <div className="grid gap-6 lg:grid-cols-[400px_minmax(0,1fr)] items-start">
+      <section aria-labelledby="st" className="flex flex-col gap-3 lg:sticky lg:top-20">
         <h2 id="st" className="text-xl font-bold">{t('yourStatus')}</h2>
         <div className="flex gap-3" role="radiogroup">{tile('available', CheckCircle2, 'bg-brand')}{tile('offline', Power, 'bg-ink')}</div>
         {busy ? <Alert kind="warning">{t('busyHint')}</Alert> : <Alert kind={manual === 'available' ? 'success' : 'info'}>{manual === 'available' ? t('availableHint') : t('offlineHint')}</Alert>}
@@ -60,6 +61,7 @@ export default function WorkerHome() {
           </Link>
         ))}
       </section>
+      </div>
     </Screen>
   )
 }
