@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Eye, EyeOff, Inbox, Power, Star, Wallet, BadgeCheck } from 'lucide-react'
 import { Alert, Card, LangSwitch, Spinner, Stars, StatusBadge } from '../components/ui'
 import { ACTIVE_STATUSES, AppShell, Avatar, Page, useMyJobs, useNames } from '../components/shell'
+import { ListenButton } from '../components/listen'
 import { useI18n, tErr, type Key } from '../lib/i18n'
 import { supabase, rpc, errorCode } from '../lib/supabase'
 import { useAuth, useProfile } from '../lib/auth'
@@ -50,6 +51,7 @@ export default function WorkerHome() {
         <header className="flex items-center gap-3">
           <Avatar name={name} size="size-14" text="text-lg" />
           <div className="flex-1 min-w-0"><div className="text-sm text-ink-2">{t('salaam')}</div><h1 className="text-2xl font-extrabold truncate">{name}</h1></div>
+          <ListenButton compact text={[t('salaam'), name, `${t('yourStatus')}: ${t(current)}`, current === 'busy' ? t('busyHint') : current === 'available' ? t('availableHint') : t('offlineHint'), fresh.length ? `${fresh.length} ${t('newRequests')}. ${t('replySoon')}` : t('noNewRequests')].join('. ')} />
           <div className="lg:hidden"><LangSwitch /></div>
         </header>
 

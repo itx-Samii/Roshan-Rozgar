@@ -5,6 +5,7 @@ import { Check, MapPin, Send, Tag, Zap } from 'lucide-react'
 import { Alert, Card, Spinner, StatusBadge, tradeIcons } from '../components/ui'
 import { AppShell, Avatar, Page, useMyJobs, useNames, useTimeAgo } from '../components/shell'
 import { useNotify } from '../components/notify'
+import { ListenButton } from '../components/listen'
 import { useI18n, tErr, type Key } from '../lib/i18n'
 import { rpc, errorCode } from '../lib/supabase'
 import { nameOf, useRefData, type Job } from '../lib/data'
@@ -69,7 +70,8 @@ export default function WorkerRequests() {
                     ? <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold inline-flex items-center gap-1"><Send className="size-4" aria-hidden />{t('newRequestPill')}</span>
                     : <StatusBadge status={j.status} />}
                 </div>
-                <p className="text-lg font-semibold flex gap-2 items-start"><Icon className="size-5 text-accent-text shrink-0 mt-1" aria-hidden />{j.problem}</p>
+                <div className="flex items-start gap-2"><p className="flex-1 text-lg font-semibold flex gap-2 items-start"><Icon className="size-5 text-accent-text shrink-0 mt-1" aria-hidden />{j.problem}</p>
+                  <ListenButton compact text={`${who}. ${j.problem}. ${nameOf(areas.find((a) => a.id === j.area_id), lang)}`} /></div>
                 <p className="text-ink-2 flex items-center gap-2"><MapPin className="size-4 shrink-0" aria-hidden />{nameOf(areas.find((a) => a.id === j.area_id), lang)} · {nameOf(cat, lang)}</p>
                 {j.status === 'requested' ? (
                   <div className="grid grid-cols-2 gap-3">
