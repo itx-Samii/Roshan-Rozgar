@@ -44,7 +44,7 @@ export default function Auth() {
       ? await supabase.auth.signUp({ email, password, options: { data: { display_name: name } } })
       : await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
-    if (res.error) setError(res.error.message.includes('fetch') ? tErr(t, 'NETWORK') : res.error.message)
+    if (res.error) setError(tErr(t, errorCode(res.error)))
     else if (mode === 'up' && !res.data.session) setError('Check your email to confirm the account, then sign in.')
   }
 

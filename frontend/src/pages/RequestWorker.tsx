@@ -5,7 +5,7 @@ import { Mic, Square } from 'lucide-react'
 import { Alert, Button, Card, Screen, Spinner, Stars, TopBar } from '../components/ui'
 import { useI18n, tErr } from '../lib/i18n'
 import { supabase, rpc, errorCode } from '../lib/supabase'
-import { nameOf, useDictation, useRefData } from '../lib/data'
+import { nameOf, useDictation, useRefData, yearsLabel } from '../lib/data'
 
 const field = 'w-full rounded-xl border border-line-strong bg-surface px-4 py-3'
 
@@ -44,7 +44,7 @@ export default function RequestWorker() {
       <TopBar title={w.name} />
       <Card className="flex flex-col gap-2">
         <div className="text-lg font-bold">{w.name}</div>
-        <div className="text-ink-2">{nameOf(categories.find((c) => c.id === cat), lang)} · <span className="num">{w.years_experience}</span> {t('yrs')}{w.visit_fee_from ? <> · {t('visitFrom')} <span className="num">Rs {w.visit_fee_from}</span></> : null}</div>
+        <div className="text-ink-2">{nameOf(categories.find((c) => c.id === cat), lang)} · <span className="num">{yearsLabel(w.years_experience ?? 0)}</span> {t('yrs')}{w.visit_fee_from ? <> · {t('visitFrom')} <span className="num">Rs {w.visit_fee_from}</span></> : null}</div>
         <Alert kind="info">{t('notVerified')}</Alert>
         {w.reviews.map((r, i) => <div key={i} className="border-t border-muted pt-2"><Stars value={r.rating} /> <span className="text-ink-2">{r.comment}</span></div>)}
       </Card>

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Check, Clock, Loader2, Power, CheckCircle2, AlertTriangle, Info, Zap, Droplets, Snowflake, Car, Hammer, PaintRoller } from 'lucide-react'
 import { useI18n, type Key } from '../lib/i18n'
@@ -23,9 +23,10 @@ export function Button({ variant = 'primary', loading, children, className = '',
   )
 }
 
-export function Chip({ selected, children, onClick }: { selected?: boolean; children: ReactNode; onClick?: () => void }) {
+/** `single` = one-of-many choice (radio semantics); default = multi-select (checkbox semantics). */
+export function Chip({ selected, children, onClick, single, label }: { selected?: boolean; children: ReactNode; onClick?: () => void; single?: boolean; label?: string }) {
   return (
-    <button type="button" role="checkbox" aria-checked={!!selected} onClick={onClick}
+    <button type="button" role={single ? 'radio' : 'checkbox'} aria-checked={!!selected} aria-label={label} onClick={onClick}
       className={`min-h-11 rounded-full px-4 inline-flex items-center gap-2 font-semibold ${selected ? 'bg-brand-subtle border-2 border-brand text-brand-hover' : 'bg-surface border border-line-strong text-ink'}`}>
       {selected && <Check className="size-4" aria-hidden />}{children}
     </button>
@@ -89,6 +90,12 @@ export function Alert({ kind = 'error', children }: { kind?: 'error' | 'info' | 
 
 export function Dialog({ open, title, body, confirmLabel, cancelLabel, danger, loading, onConfirm, onCancel }: {
   open: boolean; title: string; body: string; confirmLabel: string; cancelLabel: string; danger?: boolean; loading?: boolean; onConfirm: () => void; onCancel: () => void }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onCancel])
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-6 bg-ink/60" onClick={onCancel}>

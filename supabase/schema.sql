@@ -320,3 +320,44 @@ insert into public.service_areas (id, city, name_en, name_ur) values
   (1,'Lahore','Gulberg','گلبرگ'),(2,'Lahore','Model Town','ماڈل ٹاؤن'),(3,'Lahore','Johar Town','جوہر ٹاؤن'),
   (4,'Lahore','DHA','ڈیفنس'),(5,'Lahore','Iqbal Town','اقبال ٹاؤن'),(6,'Lahore','Garden Town','گارڈن ٹاؤن'),
   (7,'Lahore','Township','ٹاؤن شپ'),(8,'Lahore','Wapda Town','واپڈا ٹاؤن'),(9,'Lahore','Samanabad','سمن آباد'),(10,'Lahore','Cantt','کینٹ');
+
+-- ============ Migration 2 (2026-11-10): offline workers are hidden and not requestable ============
+create or replace function public.search_workers(p_category smallint default null, p_area smallint default null)
+returns table (worker_id uuid, display_name text, years_experience smallint, visit_fee_from int, availability text,
+               rating numeric, review_count bigint, completed_jobs bigint)
+language sql stable security definer set search_path = '' as $$
+  select * from (
+    select p.id, p.display_name, w.years_experience, w.visit_fee_from,
+      case when exists (select 1 from public.jobs j where j.worker_id = p.id and j.status in ('confirmed','in_progress','awaiting_confirmation'))
+           then 'busy' else w.manual_availability end as availability,
+      (select round(avg(r.rating)::numeric, 1) from public.reviews r where r.worker_id = p.id) as rating,
+      (select count(*) from public.reviews r where r.worker_id = p.id) as review_count,
+      (select count(*) from public.jobs j where j.worker_id = p.id and j.status = 'completed') as completed_jobs
+    from public.profiles p join public.worker_profiles w on w.user_id = p.id
+    where w.onboarded_at is not null
+      and (p_category is null or exists (select 1 from public.worker_services s where s.worker_id = p.id and s.category_id = p_category))
+      and (p_area is null or exists (select 1 from public.worker_areas a where a.worker_id = p.id and a.area_id = p_area))
+  ) x
+  where x.availability <> 'offline'
+  order by case x.availability when 'available' then 0 else 1 end, x.rating desc nulls last, x.completed_jobs desc;
+$$;
+
+create or replace function public.create_job_request(p_worker uuid, p_category smallint, p_area smallint, p_problem text, p_address text) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'customer') then raise exception 'FORBIDDEN'; end if;
+  if not exists (select 1 from public.worker_services where worker_id = p_worker and category_id = p_category) then raise exception 'NOT_FOUND'; end if;
+  if exists (select 1 from public.worker_profiles where user_id = p_worker and manual_availability = 'offline') then raise exception 'WORKER_OFFLINE'; end if;
+  begin
+    insert into public.jobs (customer_id, worker_id, category_id, area_id, problem)
+      values (auth.uid(), p_worker, p_category, p_area, trim(p_problem)) returning id into v_id;
+  exception when unique_violation then raise exception 'OPEN_REQUEST_EXISTS';
+  end;
+  insert into public.job_private (job_id, address) values (v_id, trim(p_address));
+  perform public._history(v_id, null, 'requested');
+  return v_id;
+end $$;
+
+revoke execute on function public.search_workers, public.create_job_request from public, anon;
+grant execute on function public.search_workers, public.create_job_request to authenticated;

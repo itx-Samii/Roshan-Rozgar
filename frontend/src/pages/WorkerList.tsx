@@ -4,7 +4,7 @@ import { Search } from 'lucide-react'
 import { Alert, Availability, Button, Card, Screen, Spinner, Stars, TopBar } from '../components/ui'
 import { useI18n, tErr } from '../lib/i18n'
 import { rpc, errorCode } from '../lib/supabase'
-import { nameOf, useRefData } from '../lib/data'
+import { nameOf, useRefData, yearsLabel } from '../lib/data'
 
 export type WorkerRow = { worker_id: string; display_name: string; years_experience: number; visit_fee_from: number | null; availability: 'available' | 'busy' | 'offline'; rating: number | null; review_count: number; completed_jobs: number }
 
@@ -32,10 +32,10 @@ export default function WorkerList() {
         <Card key={w.worker_id} className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <span className="size-14 rounded-full bg-brand-subtle text-brand font-bold grid place-items-center en">{w.display_name.slice(0, 2).toUpperCase()}</span>
-            <div className="flex-1"><div className="text-lg font-bold">{w.display_name}</div><div className="text-sm text-ink-2"><span className="num">{w.years_experience}</span> {t('yrs')} · <span className="num">{w.completed_jobs}</span> {t('jobsDone')}</div></div>
+            <div className="flex-1"><div className="text-lg font-bold">{w.display_name}</div><div className="text-sm text-ink-2"><span className="num">{yearsLabel(w.years_experience)}</span> {t('yrs')} · <span className="num">{w.completed_jobs}</span> {t('jobsDone')}</div></div>
             <Availability value={w.availability} />
           </div>
-          <div className="text-sm">{w.review_count ? <span className="inline-flex items-center gap-2"><Stars value={Number(w.rating)} /><span className="num font-bold">{w.rating}</span><span className="text-ink-2 num">({w.review_count})</span></span> : <span className="text-ink-2">{t('newWorker')}</span>}
+          <div className="text-sm">{w.review_count ? <span className="inline-flex items-center gap-2"><Stars value={Number(w.rating)} /><span className="num font-bold">{Number(w.rating).toFixed(1)}</span><span className="text-ink-2 num">({w.review_count})</span></span> : <span className="text-ink-2">{t('newWorker')}</span>}
             {w.visit_fee_from ? <span className="text-ink-2"> · {t('visitFrom')} <span className="num">Rs {w.visit_fee_from}</span></span> : null}</div>
           {w.availability === 'busy' ? <Alert kind="warning">{t('busyReason')}</Alert>
             : <Button variant="secondary" onClick={() => nav(`/c/worker/${w.worker_id}?cat=${cat}&area=${area}`)}>{t('request')}</Button>}

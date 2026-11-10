@@ -4,11 +4,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Check, Mic, Square } from 'lucide-react'
 import { Alert, Button, Card, Chip, Screen, Spinner, TopBar, tradeIcons, tradeTint } from '../components/ui'
 import { useI18n, tErr } from '../lib/i18n'
-import { nameOf, useDictation, useRefData } from '../lib/data'
+import { nameOf, useDictation, useRefData, YEAR_RANGES as YEARS } from '../lib/data'
 import { rpc, errorCode } from '../lib/supabase'
 import { useProfile } from '../lib/auth'
 
-const YEARS = [[1, '1-2'], [4, '3-5'], [8, '6-10'], [12, '10+']] as const
 const FEES = [300, 500, 800, 1000]
 
 export default function WorkerOnboarding() {
@@ -35,7 +34,8 @@ export default function WorkerOnboarding() {
     setBusy(true); setError(null)
     try {
       await rpc('complete_onboarding', { p_name: displayName, p_years: years ?? 0, p_fee: fee, p_categories: cats, p_areas: areaIds })
-      await qc.invalidateQueries(); nav('/w', { replace: true })
+      // Drop the cached "not onboarded" worker row so the dashboard doesn't bounce back here
+      await qc.resetQueries({ queryKey: ['worker'] }); await qc.invalidateQueries(); nav('/w', { replace: true })
     } catch (e) { setError(tErr(t, errorCode(e))) } finally { setBusy(false) }
   }
 
@@ -79,11 +79,11 @@ export default function WorkerOnboarding() {
       {dict.listening && <Alert kind="info">{t('listening')}</Alert>}
       {(dict.error || !dict.supported) && <Alert kind="warning">{t('voiceUnavailable')}</Alert>}
       <fieldset className="flex flex-col gap-2"><legend className="font-semibold mb-2">{t('experience')}</legend>
-        <div className="flex flex-wrap gap-2">{YEARS.map(([v, l]) => <Chip key={v} selected={years === v} onClick={() => setYears(v)}><span className="en">{l}</span></Chip>)}</div></fieldset>
+        <div className="flex flex-wrap gap-2">{YEARS.map(([v, l]) => <Chip single label={l} key={v} selected={years === v} onClick={() => setYears(v)}><span className="en">{l}</span></Chip>)}</div></fieldset>
       <fieldset className="flex flex-col gap-2"><legend className="font-semibold mb-2">{t('areas')}</legend>
         <div className="flex flex-wrap gap-2">{areas.map((a) => <Chip key={a.id} selected={areaIds.includes(a.id)} onClick={() => setAreaIds(toggle(areaIds, a.id))}>{nameOf(a, lang)}</Chip>)}</div></fieldset>
       <fieldset className="flex flex-col gap-2"><legend className="font-semibold mb-2">{t('visitFee')}</legend>
-        <div className="flex flex-wrap gap-2">{FEES.map((f) => <Chip key={f} selected={fee === f} onClick={() => setFee(f)}><span className="en">Rs {f}</span></Chip>)}</div></fieldset>
+        <div className="flex flex-wrap gap-2">{FEES.map((f) => <Chip single label={`Rs ${f}`} key={f} selected={fee === f} onClick={() => setFee(f)}><span className="en">Rs {f}</span></Chip>)}</div></fieldset>
     </Screen>
   )
 

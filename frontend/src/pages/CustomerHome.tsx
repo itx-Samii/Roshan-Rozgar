@@ -40,7 +40,7 @@ export default function CustomerHome() {
         })}
       </div>
       <fieldset><legend className="font-semibold mb-2">{t('area')} · Lahore</legend>
-        <div className="flex flex-wrap gap-2">{areas.map((a) => <Chip key={a.id} selected={area === a.id} onClick={() => setArea(a.id)}>{nameOf(a, lang)}</Chip>)}</div>
+        <div className="flex flex-wrap gap-2">{areas.map((a) => <Chip single key={a.id} selected={area === a.id} onClick={() => setArea(a.id)}>{nameOf(a, lang)}</Chip>)}</div>
       </fieldset>
       {!!jobs.data?.length && (
         <section className="flex flex-col gap-3">

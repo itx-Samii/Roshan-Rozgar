@@ -23,7 +23,7 @@ export default function WorkerHome() {
   const setAvail = useMutation({ mutationFn: (s: 'available' | 'offline') => rpc('set_availability', { p_status: s }), onSuccess: () => qc.invalidateQueries({ queryKey: ['worker', uid] }) })
 
   if (wp.isLoading || jobs.isLoading) return <Spinner />
-  if (wp.data && !wp.data.onboarded_at) return <Navigate to="/w/onboarding" replace />
+  if (wp.data && !wp.data.onboarded_at && !wp.isFetching) return <Navigate to="/w/onboarding" replace />
   const busy = (jobs.data ?? []).some((j) => ACTIVE.includes(j.status))
   const manual = wp.data?.manual_availability as 'available' | 'offline'
   const open = (jobs.data ?? []).filter((j) => !['completed', 'cancelled'].includes(j.status))
@@ -32,7 +32,7 @@ export default function WorkerHome() {
   const tile = (v: 'available' | 'offline', Icon: typeof Power, on: string) => {
     const selected = !busy && manual === v
     return (
-      <button role="radio" aria-checked={selected} disabled={busy || setAvail.isPending} onClick={() => setAvail.mutate(v)}
+      <button role="radio" aria-checked={selected} aria-label={t(v)} disabled={busy || setAvail.isPending} onClick={() => setAvail.mutate(v)}
         className={`flex-1 rounded-2xl p-4 flex flex-col items-center gap-2 border-2 min-h-28 ${selected ? `${on} border-transparent text-white` : 'bg-surface border-muted'} disabled:opacity-60`}>
         <Icon className="size-8" aria-hidden /><span className="font-bold">{t(v)}</span>
       </button>

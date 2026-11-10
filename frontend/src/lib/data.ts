@@ -8,6 +8,10 @@ export type Area = { id: number; city: string; name_en: string; name_ur: string 
 export type Job = { id: string; customer_id: string; worker_id: string; category_id: number; area_id: number; status: JobStatus; problem: string; agreed_price: number | null; version: number; created_at: string; updated_at: string }
 export type Quote = { id: string; job_id: string; amount_pkr: number; includes_parts: boolean; note: string | null; status: 'pending' | 'accepted' | 'declined' | 'expired'; expires_at: string; created_at: string }
 
+/** Experience is chosen as a range; we store a representative number but always display the range the worker picked. */
+export const YEAR_RANGES = [[1, '1-2'], [4, '3-5'], [8, '6-10'], [12, '10+']] as const
+export const yearsLabel = (n: number) => YEAR_RANGES.find(([v]) => v === n)?.[1] ?? String(n)
+
 export const nameOf = (x: { name_en: string; name_ur: string } | undefined, lang: Lang) => (x ? (lang === 'ur' ? x.name_ur : x.name_en) : '')
 
 export function useRefData() {

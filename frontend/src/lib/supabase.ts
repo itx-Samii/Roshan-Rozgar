@@ -16,7 +16,13 @@ export type JobStatus =
 /** Turns database error codes raised by our SQL functions into stable codes for the UI. */
 export function errorCode(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? ''
-  const known = ['WORKER_BUSY','QUOTE_EXPIRED','QUOTE_NOT_CURRENT','INVALID_TRANSITION','ALREADY_REVIEWED','OPEN_REQUEST_EXISTS','ROLE_ALREADY_SET','FORBIDDEN','NOT_FOUND','VALIDATION_FAILED']
+  const pgCode = (e as { code?: string })?.code
+  if (pgCode === 'PGRST116') return 'NOT_FOUND' // ".single()" found no row the caller may see
+  if (msg.includes('Invalid login credentials')) return 'BAD_LOGIN'
+  if (msg.includes('already registered')) return 'EMAIL_TAKEN'
+  if (/rate limit|too many/i.test(msg)) return 'RATE_LIMITED'
+  if (/password/i.test(msg) && /weak|short|least/i.test(msg)) return 'WEAK_PASSWORD'
+  const known = ['WORKER_OFFLINE','WORKER_BUSY','QUOTE_EXPIRED','QUOTE_NOT_CURRENT','INVALID_TRANSITION','ALREADY_REVIEWED','OPEN_REQUEST_EXISTS','ROLE_ALREADY_SET','FORBIDDEN','NOT_FOUND','VALIDATION_FAILED']
   return known.find((k) => msg.includes(k)) ?? (msg.includes('Failed to fetch') ? 'NETWORK' : 'UNKNOWN')
 }
 

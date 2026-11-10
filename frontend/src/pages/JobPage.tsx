@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MapPin, Send } from 'lucide-react'
 import { Alert, Button, Card, Chip, Dialog, Screen, Spinner, StatusBadge, TopBar } from '../components/ui'
@@ -13,6 +13,7 @@ type Pending = null | { kind: 'accept' | 'done' | 'cancel'; quoteId?: string }
 
 export default function JobPage() {
   const { id } = useParams()
+  const nav = useNavigate()
   const { t, lang } = useI18n()
   const { session } = useAuth()
   const uid = session!.user.id
@@ -48,7 +49,7 @@ export default function JobPage() {
   }
 
   if (q.isLoading) return <Spinner />
-  if (q.error || !q.data) return <Screen><TopBar title="" /><Alert>{tErr(t, errorCode(q.error))}</Alert></Screen>
+  if (q.error || !q.data) return <Screen><TopBar title="" /><Alert>{tErr(t, errorCode(q.error))}</Alert><Button variant="secondary" onClick={() => nav('/')}>{t('goHome')}</Button></Screen>
   const { job, quotes, address, names, messages, review } = q.data
   const isWorker = job.worker_id === uid
   const other = names[isWorker ? job.customer_id : job.worker_id] ?? ''
@@ -65,7 +66,7 @@ export default function JobPage() {
       : (
         <Card className="flex flex-col gap-3">
           <h2 className="text-lg font-bold">{t('yourPrice')}</h2>
-          <div className="flex flex-wrap gap-2">{PRICES.map((v) => <Chip key={v} selected={price === v} onClick={() => setPrice(v)}><span className="en">Rs {v}</span></Chip>)}</div>
+          <div className="flex flex-wrap gap-2">{PRICES.map((v) => <Chip single label={`Rs ${v}`} key={v} selected={price === v} onClick={() => setPrice(v)}><span className="en">Rs {v}</span></Chip>)}</div>
           <input className="min-h-14 rounded-xl border border-line-strong px-4 en" dir="ltr" inputMode="numeric" value={price} aria-label={t('yourPrice')}
             onChange={(e) => setPrice(e.target.value === '' ? '' : Math.max(0, Math.min(1000000, Number(e.target.value.replace(/\D/g, '')))))} />
           <Chip selected={parts} onClick={() => setParts(!parts)}>{t('partsIncluded')}</Chip>
@@ -79,13 +80,19 @@ export default function JobPage() {
       <Card className="flex flex-col gap-3 border-2 border-accent">
         <div className="text-ink-2">{t('priceFrom')}</div>
         <div className="text-4xl font-extrabold en">Rs {pending.amount_pkr.toLocaleString()}</div>
-        <div className="text-ink-2">{pending.includes_parts ? t('partsIncluded') : ''}{pending.note ? ` · ${pending.note}` : ''}</div>
+        <div className="text-ink-2">{[pending.includes_parts ? t('partsIncluded') : null, pending.note].filter(Boolean).join(' · ')}</div>
         <Button onClick={() => setDialog({ kind: 'accept', quoteId: pending.id })}>{t('accept')}</Button>
         <Button variant="secondary" disabled={busy} onClick={() => run(() => rpc('respond_quote', { p_quote: pending.id, p_accept: false }))}>{t('decline')}</Button>
       </Card>
     )
   } else if (!isWorker && job.status === 'requested') {
     action = <Alert kind="info">{t('waitingWorker')}</Alert>
+  } else if (!isWorker && job.status === 'confirmed') {
+    action = <Alert kind="success">{t('confirmedCustomer')}</Alert>
+  } else if (!isWorker && job.status === 'in_progress') {
+    action = <Alert kind="info">{t('inProgressCustomer')}</Alert>
+  } else if (job.status === 'disputed') {
+    action = <Alert kind="warning">{t('disputedNote')}</Alert>
   } else if (isWorker && job.status === 'confirmed') {
     action = <Button loading={busy} onClick={() => run(() => rpc('job_action', { p_job: job.id, p_action: 'start' }))}>{t('startJob')}</Button>
   } else if (isWorker && job.status === 'in_progress') {
@@ -144,7 +151,7 @@ export default function JobPage() {
         )}
       </section>
 
-      {canCancel && <Button variant="tertiary" onClick={() => setDialog({ kind: 'cancel' })}>{t('cancelBooking')}</Button>}
+      {canCancel && <Button variant="tertiary" onClick={() => setDialog({ kind: 'cancel' })}>{job.status === 'confirmed' ? t('cancelBooking') : t('cancelRequest')}</Button>}
 
       <Dialog open={dialog?.kind === 'accept'} title={t('confirmBookingQ')} body={t('confirmBookingBody')} confirmLabel={t('yesConfirm')} cancelLabel={t('goBack')} loading={busy}
         onConfirm={() => run(() => rpc('respond_quote', { p_quote: dialog!.quoteId, p_accept: true }))} onCancel={() => setDialog(null)} />
