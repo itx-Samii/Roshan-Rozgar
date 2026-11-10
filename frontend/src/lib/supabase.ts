@@ -21,6 +21,8 @@ export function errorCode(e: unknown): string {
   if (msg.includes('Invalid login credentials')) return 'BAD_LOGIN'
   if (msg.includes('already registered')) return 'EMAIL_TAKEN'
   if (/email not confirmed/i.test(msg)) return 'EMAIL_NOT_CONFIRMED'
+  if (/token has expired or is invalid|otp.*(expired|invalid)/i.test(msg)) return 'OTP_INVALID'
+  if (/not authorized/i.test(msg) && /email/i.test(msg)) return 'EMAIL_NOT_AUTHORIZED'
   if (/rate limit|too many/i.test(msg)) return 'RATE_LIMITED'
   if (/password/i.test(msg) && /weak|short|least/i.test(msg)) return 'WEAK_PASSWORD'
   const known = ['WORKER_OFFLINE','WORKER_BUSY','QUOTE_EXPIRED','QUOTE_NOT_CURRENT','INVALID_TRANSITION','ALREADY_REVIEWED','OPEN_REQUEST_EXISTS','ROLE_ALREADY_SET','FORBIDDEN','NOT_FOUND','VALIDATION_FAILED']

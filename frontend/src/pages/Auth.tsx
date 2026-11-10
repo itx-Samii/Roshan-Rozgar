@@ -19,7 +19,7 @@ export default function Auth() {
   const [mode, setMode] = useState<'in' | 'up'>(wantRole ? 'up' : 'in')
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('')
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null)
-  const [sentTo, setSentTo] = useState<string | null>(null); const [unconfirmed, setUnconfirmed] = useState(false); const [resent, setResent] = useState(false)
+  const [sentTo, setSentTo] = useState<string | null>(null); const [code, setCode] = useState(''); const [unconfirmed, setUnconfirmed] = useState(false); const [resent, setResent] = useState(false)
 
   // Signed in: pick role once, then route by role
   if (session && profile.data) {
@@ -57,18 +57,38 @@ export default function Auth() {
     if (e2) setError(tErr(t, errorCode(e2))); else setResent(true)
   }
 
+  // Confirmation email: the user can type the code from it OR tap its link (both work)
+  const verify = async (e: FormEvent) => {
+    e.preventDefault(); if (!sentTo) return
+    setBusy(true); setError(null)
+    const token = code.replace(/\D/g, '')
+    let res = await supabase.auth.verifyOtp({ email: sentTo, token, type: 'email' })
+    if (res.error) res = await supabase.auth.verifyOtp({ email: sentTo, token, type: 'signup' })
+    setBusy(false)
+    if (res.error) setError(tErr(t, errorCode(res.error)))
+    else { setSentTo(null); setCode(''); await qc.invalidateQueries({ queryKey: ['profile'] }) } // signed in → role choice / home
+  }
+
   if (sentTo) return (
     <Screen>
       <TopBar title={t('checkEmailTitle')} end={<LangSwitch />} />
-      <div className="flex flex-col items-center text-center gap-4 py-6">
+      <div className="flex flex-col items-center text-center gap-3 pt-4">
         <span className="size-20 rounded-full bg-brand-subtle text-brand grid place-items-center"><MailCheck className="size-10" aria-hidden /></span>
         <h1 className="text-2xl font-extrabold">{t('checkEmailTitle')}</h1>
-        <p className="text-ink-2">{t('checkEmailBody')}</p>
         <p className="font-bold en" dir="ltr">{sentTo}</p>
       </div>
-      {error && <Alert>{error}</Alert>}
-      {resent && <Alert kind="success">{t('resent')}</Alert>}
-      <Button variant="secondary" loading={busy} onClick={() => resend(sentTo)}>{t('resend')}</Button>
+      <form onSubmit={verify} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-2 font-semibold">{t('codeLabel')}
+          <input className={`${field} en text-center text-2xl tracking-[0.5em] font-bold`} dir="ltr" inputMode="numeric" autoComplete="one-time-code"
+            pattern="[0-9 ]*" maxLength={12} value={code} onChange={(e) => setCode(e.target.value)} placeholder="••••••" aria-describedby="code-hint" />
+        </label>
+        <p id="code-hint" className="text-sm text-ink-2">{t('codeHint')}</p>
+        {error && <Alert>{error}</Alert>}
+        {resent && <Alert kind="success">{t('resent')}</Alert>}
+        <Button type="submit" loading={busy} disabled={code.replace(/\D/g, '').length < 6}>{t('verifyCode')}</Button>
+      </form>
+      <p className="text-center text-ink-2">{t('orTapLink')}</p>
+      <Button variant="secondary" disabled={busy} onClick={() => resend(sentTo)}>{t('resend')}</Button>
       <Button variant="tertiary" onClick={() => { setSentTo(null); setMode('in') }}>{t('signIn')}</Button>
     </Screen>
   )
@@ -77,7 +97,7 @@ export default function Auth() {
     <Screen>
       <TopBar title={mode === 'up' ? t('signUp') : t('signIn')} end={<LangSwitch />} />
       <div className="flex justify-center"><Logo size={64} /></div>
-      {error && <Alert>{error}{unconfirmed && <button type="button" className="block mt-2 underline font-bold" onClick={() => resend(email)}>{t('resend')}</button>}</Alert>}
+      {error && <Alert>{error}{unconfirmed && <button type="button" className="block mt-2 underline font-bold" onClick={async () => { await resend(email); setSentTo(email) }}>{t('resend')}</button>}</Alert>}
       {resent && <Alert kind="success">{t('resent')}</Alert>}
       <form onSubmit={submit} className="flex flex-col gap-4">
         {mode === 'up' && <label className="flex flex-col gap-2 font-semibold">{t('name')}<input className={field} required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></label>}
