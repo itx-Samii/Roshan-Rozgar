@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Eye, EyeOff, Inbox, Power, Star, Wallet, BadgeCheck } from 'lucide-react'
-import { Alert, Card, LangSwitch, Spinner, StatusBadge } from '../components/ui'
+import { Alert, Card, LangSwitch, Spinner, Stars, StatusBadge } from '../components/ui'
 import { ACTIVE_STATUSES, AppShell, Avatar, Page, useMyJobs, useNames } from '../components/shell'
 import { useI18n, tErr, type Key } from '../lib/i18n'
 import { supabase, rpc, errorCode } from '../lib/supabase'
@@ -20,12 +20,12 @@ export default function WorkerHome() {
   const wp = useQuery({ queryKey: ['worker', uid], queryFn: async () => {
     const { data, error } = await supabase.from('worker_profiles').select('manual_availability, onboarded_at, visit_fee_from').eq('user_id', uid).single(); if (error) throw error; return data } })
   const rating = useQuery({ queryKey: ['myRating', uid], queryFn: async () => {
-    const { data } = await supabase.from('reviews').select('rating').eq('worker_id', uid); const r = data ?? []
-    return { avg: r.length ? r.reduce((s, x) => s + x.rating, 0) / r.length : null, n: r.length } } })
+    const { data } = await supabase.from('reviews').select('rating, comment, created_at, customer_id').eq('worker_id', uid).order('created_at', { ascending: false }); const r = data ?? []
+    return { avg: r.length ? r.reduce((s, x) => s + x.rating, 0) / r.length : null, n: r.length, latest: r[0] } } })
   const jobsQ = useMyJobs()
   const setAvail = useMutation({ mutationFn: (s: 'available' | 'offline') => rpc('set_availability', { p_status: s }), onSuccess: () => qc.invalidateQueries({ queryKey: ['worker', uid] }) })
   const jobs = jobsQ.data ?? []
-  const names = useNames(jobs.map((j) => j.customer_id))
+  const names = useNames([...jobs.map((j) => j.customer_id), ...(rating.data?.latest ? [rating.data.latest.customer_id] : [])])
 
   if (wp.isLoading || jobsQ.isLoading) return <AppShell><Spinner /></AppShell>
   if (wp.data && !wp.data.onboarded_at && !wp.isFetching) return <Navigate to="/w/onboarding" replace />
@@ -50,34 +50,34 @@ export default function WorkerHome() {
         <header className="flex items-center gap-3">
           <Avatar name={name} size="size-14" text="text-lg" />
           <div className="flex-1 min-w-0"><div className="text-sm text-ink-2">{t('salaam')}</div><h1 className="text-2xl font-extrabold truncate">{name}</h1></div>
-          <LangSwitch />
+          <div className="lg:hidden"><LangSwitch /></div>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-2 items-start">
-          <Card className="flex flex-col gap-4 p-5">
-            <h2 className="text-lg font-bold">{t('yourStatus')}</h2>
-            <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t('yourStatus')}>
-              {tiles.map(({ v, Icon, sub }) => {
-                const sel = current === v
-                const disabled = v === 'busy' || !!active || setAvail.isPending
-                return (
-                  <button key={v} role="radio" aria-checked={sel} aria-label={t(v)} disabled={disabled} onClick={() => v !== 'busy' && setAvail.mutate(v)}
-                    className={`relative rounded-2xl p-3 min-h-32 flex flex-col items-center justify-center gap-2 text-center border-2 transition-colors ${sel ? `${tileCls[v]} border-transparent shadow-md` : 'bg-surface border-muted hover:border-line-strong'} ${disabled && !sel ? 'opacity-60' : ''}`}>
-                    <span className={`size-11 rounded-full grid place-items-center ${sel ? 'bg-white/20' : iconCls[v]}`}><Icon className="size-6" aria-hidden /></span>
-                    <span className="font-bold leading-tight">{t(v)}</span>
-                    <span className={`text-xs ${sel ? 'opacity-90' : 'text-ink-2'}`}>{t(sub)}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div className={`rounded-xl px-4 py-3 flex gap-3 items-start ${current === 'available' ? 'bg-brand-subtle text-brand-hover' : current === 'busy' ? 'bg-accent-subtle text-accent-text' : 'bg-subtle text-ink-2'}`}>
-              {current === 'offline' ? <EyeOff className="size-5 shrink-0 mt-0.5" aria-hidden /> : <Eye className="size-5 shrink-0 mt-0.5" aria-hidden />}
-              <span className="font-semibold">{current === 'busy' ? t('busyHint') : current === 'available' ? t('availableHint') : t('offlineHint')}</span>
-            </div>
-            {setAvail.error && <Alert>{tErr(t, errorCode(setAvail.error))}</Alert>}
-          </Card>
-
+        <div className="grid gap-5 md:grid-cols-2 items-start">
           <div className="flex flex-col gap-5">
+            <Card className="flex flex-col gap-4 p-5">
+              <h2 className="text-lg font-bold">{t('yourStatus')}</h2>
+              <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t('yourStatus')}>
+                {tiles.map(({ v, Icon, sub }) => {
+                  const sel = current === v
+                  const disabled = v === 'busy' || !!active || setAvail.isPending
+                  return (
+                    <button key={v} role="radio" aria-checked={sel} aria-label={t(v)} disabled={disabled} onClick={() => v !== 'busy' && setAvail.mutate(v)}
+                      className={`relative rounded-2xl p-3 min-h-32 flex flex-col items-center justify-center gap-2 text-center border-2 transition-colors ${sel ? `${tileCls[v]} border-transparent shadow-md` : 'bg-surface border-muted hover:border-line-strong'} ${disabled && !sel ? 'opacity-60' : ''}`}>
+                      <span className={`size-11 rounded-full grid place-items-center ${sel ? 'bg-white/20' : iconCls[v]}`}><Icon className="size-6" aria-hidden /></span>
+                      <span className="font-bold leading-tight">{t(v)}</span>
+                      <span className={`text-xs ${sel ? 'opacity-90' : 'text-ink-2'}`}>{t(sub)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className={`rounded-xl px-4 py-3 flex gap-3 items-start ${current === 'available' ? 'bg-brand-subtle text-brand-hover' : current === 'busy' ? 'bg-accent-subtle text-accent-text' : 'bg-subtle text-ink-2'}`}>
+                {current === 'offline' ? <EyeOff className="size-5 shrink-0 mt-0.5" aria-hidden /> : <Eye className="size-5 shrink-0 mt-0.5" aria-hidden />}
+                <span className="font-semibold">{current === 'busy' ? t('busyHint') : current === 'available' ? t('availableHint') : t('offlineHint')}</span>
+              </div>
+              {setAvail.error && <Alert>{tErr(t, errorCode(setAvail.error))}</Alert>}
+            </Card>
+
             {active && (
               <Link to={`/job/${active.id}`} className="block">
                 <Card className="border-2 border-accent flex flex-col gap-3 p-5 hover:shadow-md">
@@ -103,18 +103,29 @@ export default function WorkerHome() {
               </Card>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
               {[
-                { Icon: Wallet, v: wp.data?.visit_fee_from ? `Rs ${wp.data.visit_fee_from}` : '—', k: 'stat_fee' as Key },
-                { Icon: BadgeCheck, v: String(done), k: 'stat_jobs' as Key },
-                { Icon: Star, v: rating.data?.avg ? rating.data.avg.toFixed(1) : '—', k: 'stat_rating' as Key },
-              ].map(({ Icon, v, k }) => (
-                <Card key={k} className="flex flex-col items-center gap-1 p-3 text-center">
-                  <span className="inline-flex items-center gap-1 text-lg font-extrabold en">{v}<Icon className="size-4 text-brand" aria-hidden /></span>
-                  <span className="text-xs text-ink-2">{t(k)}</span>
+                { Icon: Star, v: rating.data?.avg ? rating.data.avg.toFixed(1) : '—', k: 'stat_rating' as Key, extra: rating.data?.n ? `(${rating.data.n})` : '' },
+                { Icon: BadgeCheck, v: String(done), k: 'stat_jobs' as Key, extra: '' },
+                { Icon: Wallet, v: wp.data?.visit_fee_from ? `Rs ${wp.data.visit_fee_from}` : '—', k: 'stat_fee' as Key, extra: '' },
+              ].map(({ Icon, v, k, extra }) => (
+                <Card key={k} className="flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:px-5 text-center md:text-start">
+                  <Icon className="size-5 text-brand md:order-first" aria-hidden />
+                  <span className="text-lg font-extrabold en">{v}</span>
+                  <span className="text-xs md:text-sm text-ink-2">{t(k)} {extra && <span className="en">{extra}</span>}</span>
                 </Card>
               ))}
             </div>
+            {rating.data?.latest && (
+              <Card className="flex flex-col gap-2 p-5">
+                <div className="text-sm font-bold">{t('latestReview')} · {names[rating.data.latest.customer_id] ?? ''}</div>
+                <Stars value={rating.data.latest.rating} />
+                {rating.data.latest.comment && <p>{rating.data.latest.comment}</p>}
+              </Card>
+            )}
           </div>
         </div>
 

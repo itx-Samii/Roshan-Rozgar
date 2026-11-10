@@ -5,7 +5,7 @@ import { ArrowDown, Banknote, CalendarCheck, Check, CheckCircle2, Hash, MapPin, 
 import { Alert, Button, Card, Dialog, Spinner, StatusBadge, TopBar } from '../components/ui'
 import { PricePicker, Segmented, VoiceField } from '../components/inputs'
 import { useNotify } from '../components/notify'
-import { AppShell, Avatar } from '../components/shell'
+import { AppShell, Avatar, useIsDesktop } from '../components/shell'
 import { useI18n, tErr, type Key } from '../lib/i18n'
 import { supabase, rpc, errorCode, type JobStatus } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -21,7 +21,7 @@ const STEPS: { st: JobStatus; reached: JobStatus[] }[] = [
 ]
 
 /** Vertical progress timeline (Figma C8): each step shows when it happened. */
-function Timeline({ job, history }: { job: Job; history: { to_status: JobStatus; created_at: string }[] }) {
+function Timeline({ job, history, title }: { job: Job; history: { to_status: JobStatus; created_at: string }[]; title: string }) {
   const { t, lang } = useI18n()
   if (job.status === 'cancelled') return null
   const current = STEPS.findLastIndex((s) => s.reached.includes(job.status))
@@ -31,8 +31,8 @@ function Timeline({ job, history }: { job: Job; history: { to_status: JobStatus;
   }
   return (
     <Card className="p-5">
-      <h2 className="font-bold mb-3">{t('progress')}</h2>
-      <ol aria-label={t('progress')}>
+      <h2 className="text-lg font-bold mb-3">{title}</h2>
+      <ol aria-label={title}>
         {STEPS.map((s, i) => {
           const ongoing = s.st === 'in_progress' && ['in_progress', 'awaiting_confirmation'].includes(job.status)
           const here = ongoing; const done = i <= current && !ongoing
@@ -63,6 +63,7 @@ export default function JobPage() {
   const { t, lang } = useI18n()
   const { session } = useAuth()
   const { markSelf } = useNotify()
+  const desktop = useIsDesktop()
   const uid = session!.user.id
   const qc = useQueryClient()
   const { categories, areas } = useRefData()
@@ -237,23 +238,39 @@ export default function JobPage() {
     </section>
   )
 
+  const nextBanner = hasNext && (t(nextKey) !== nextKey) && (
+    <div className="rounded-2xl bg-accent-subtle border border-accent px-4 py-3 flex gap-3 items-start" role="status">
+      <ArrowDown className="size-5 text-accent-text shrink-0 mt-1" aria-hidden />
+      <div><div className="text-xs font-bold uppercase tracking-wide text-accent-text">{t('nextStep')}</div><div className="font-semibold">{t(nextKey)}</div></div>
+    </div>
+  )
+  const cancelBtn = canCancel && <Button variant="tertiary" onClick={() => setDialog({ kind: 'cancel' })}>{job.status === 'confirmed' ? t('cancelBooking') : t('cancelRequest')}</Button>
+
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto"><TopBar title={`${nameOf(categories.find((c) => c.id === job.category_id), lang)} · ${bookingNo}`} /></div>
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-8 items-start">
-        <aside className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
-          {hasNext && (t(nextKey) !== nextKey) && (
-            <div className="rounded-2xl bg-accent-subtle border border-accent px-4 py-3 flex gap-3 items-start" role="status">
-              <ArrowDown className="size-5 text-accent-text shrink-0 mt-1" aria-hidden />
-              <div><div className="text-xs font-bold uppercase tracking-wide text-accent-text">{t('nextStep')}</div><div className="font-semibold">{t(nextKey)}</div></div>
-            </div>
-          )}
+      <div className="max-w-[1200px] mx-auto"><TopBar title={`${nameOf(categories.find((c) => c.id === job.category_id), lang)} · ${bookingNo}`} /></div>
+      {desktop ? (
+        /* Figma R4: conversation + the binding decision on the left, booking status on the right */
+        <div className="max-w-[1200px] mx-auto px-6 py-6 grid gap-8 grid-cols-[minmax(0,1fr)_380px] items-start">
+          <main className="flex flex-col gap-5">{details}{error && <Alert>{error}</Alert>}{action}{chat}</main>
+          <aside className="flex flex-col gap-4 sticky top-24">
+            {nextBanner}
+            <Timeline job={job} history={history} title={t('bookingStatus')} />
+            {!isWorker && ['requested', 'quoted'].includes(job.status) && <Alert kind="info">{t('notBookedUntil')}</Alert>}
+            {cancelBtn}
+          </aside>
+        </div>
+      ) : (
+        <div className="max-w-xl md:max-w-2xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-5">
+          {nextBanner}
           {error && <Alert>{error}</Alert>}
           {action}
-          {canCancel && <Button variant="tertiary" onClick={() => setDialog({ kind: 'cancel' })}>{job.status === 'confirmed' ? t('cancelBooking') : t('cancelRequest')}</Button>}
-        </aside>
-        <main className="flex flex-col gap-5 lg:col-start-1 lg:row-start-1">{details}<Timeline job={job} history={history} />{chat}</main>
-      </div>
+          {cancelBtn}
+          {details}
+          <Timeline job={job} history={history} title={t('progress')} />
+          {chat}
+        </div>
+      )}
 
       <Dialog open={dialog?.kind === 'accept'} title={t('confirmBookingQ')} body={t('confirmBookingBody')} confirmLabel={t('yesConfirm')} cancelLabel={t('goBack')} loading={busy}
         onConfirm={() => run(() => rpc('respond_quote', { p_quote: dialog!.quoteId, p_accept: true }))} onCancel={() => setDialog(null)} />
