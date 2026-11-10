@@ -1,0 +1,140 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+
+export type Lang = 'ur' | 'en'
+
+const dict = {
+  appName: { ur: 'روشن روزگار', en: 'Roshan Rozgar' },
+  tagline: { ur: 'ہنر کو کام سے جوڑیں', en: 'Connecting skills with work' },
+  needWork: { ur: 'مجھے کام چاہیے', en: 'I need work' },
+  needWorkSub: { ur: 'میں کاریگر ہوں — الیکٹریشن، پلمبر، مکینک…', en: 'I am a worker — electrician, plumber, mechanic…' },
+  needWorker: { ur: 'مجھے کاریگر چاہیے', en: 'I need a worker' },
+  needWorkerSub: { ur: 'گھر یا دکان کا کام', en: 'For home or shop jobs' },
+  signIn: { ur: 'لاگ اِن کریں', en: 'Sign in' },
+  signUp: { ur: 'نیا اکاؤنٹ بنائیں', en: 'Create account' },
+  email: { ur: 'ای میل', en: 'Email' },
+  password: { ur: 'پاس ورڈ (کم از کم 8 حروف)', en: 'Password (at least 8 characters)' },
+  name: { ur: 'آپ کا نام', en: 'Your name' },
+  haveAccount: { ur: 'پہلے سے اکاؤنٹ ہے؟ لاگ اِن', en: 'Already have an account? Sign in' },
+  noAccount: { ur: 'نیا ہوں؟ اکاؤنٹ بنائیں', en: 'New here? Create an account' },
+  pleaseWait: { ur: 'انتظار کریں…', en: 'Please wait…' },
+  continue: { ur: 'آگے', en: 'Continue' },
+  back: { ur: 'واپس', en: 'Back' },
+  logout: { ur: 'لاگ آؤٹ', en: 'Sign out' },
+  chooseTrade: { ur: 'آپ کیا کام کرتے ہیں؟', en: 'What work do you do?' },
+  chooseTradeSub: { ur: 'ایک یا زیادہ کام چنیں', en: 'Pick one or more' },
+  aboutYou: { ur: 'اپنے بارے میں بتائیں', en: 'Tell us about yourself' },
+  speak: { ur: 'بول کر لکھیں', en: 'Speak to fill' },
+  listening: { ur: 'سن رہے ہیں… بولیں', en: 'Listening… speak now' },
+  voiceUnavailable: { ur: 'اس براؤزر میں آواز کی سہولت نہیں — ٹیپ کر کے بھریں', en: 'Voice is not available in this browser — fill by tapping' },
+  experience: { ur: 'کتنے سال کا تجربہ؟', en: 'Years of experience' },
+  areas: { ur: 'کن علاقوں میں کام کرتے ہیں؟', en: 'Which areas do you work in?' },
+  visitFee: { ur: 'وزٹ فیس (اندازاً)', en: 'Visit fee (approx.)' },
+  checkTitle: { ur: 'کیا یہ درست ہے؟', en: 'Is this correct?' },
+  allCorrect: { ur: 'ہاں، سب درست ہے', en: 'Yes, all correct' },
+  change: { ur: 'بدلیں', en: 'Change' },
+  yourStatus: { ur: 'آپ کا اسٹیٹس', en: 'Your status' },
+  available: { ur: 'دستیاب', en: 'Available' },
+  busy: { ur: 'مصروف', en: 'Busy' },
+  offline: { ur: 'آف لائن', en: 'Offline' },
+  availableHint: { ur: 'آپ دستیاب ہیں — گاہک آپ کو دیکھ سکتے ہیں', en: 'You are available — customers can see you' },
+  offlineHint: { ur: 'آپ آف لائن ہیں — نئی درخواستیں نہیں آئیں گی', en: 'You are offline — no new requests' },
+  busyHint: { ur: 'آپ ایک کام پر ہیں، اس لیے ”مصروف“ ہیں۔ کام مکمل ہونے کے بعد دستیاب ہو جائیں گے۔', en: 'You are on a job, so you show as Busy until it is completed.' },
+  requests: { ur: 'درخواستیں اور کام', en: 'Requests & jobs' },
+  noRequests: { ur: 'ابھی کوئی درخواست نہیں', en: 'No requests yet' },
+  whatFix: { ur: 'آپ کو کیا ٹھیک کروانا ہے؟', en: 'What do you need fixed?' },
+  area: { ur: 'علاقہ', en: 'Area' },
+  findWorkers: { ur: 'کاریگر دیکھیں', en: 'Show workers' },
+  myBookings: { ur: 'میری بکنگز', en: 'My bookings' },
+  noWorkers: { ur: 'اس علاقے میں ابھی کوئی کاریگر نہیں', en: 'No workers in this area yet' },
+  noWorkersSub: { ur: 'دوسرا علاقہ یا کام چن کر دیکھیں', en: 'Try another area or service' },
+  yrs: { ur: 'سال تجربہ', en: 'yrs experience' },
+  jobsDone: { ur: 'مکمل کام', en: 'jobs completed' },
+  newWorker: { ur: 'نیا کاریگر — ابھی کوئی ریویو نہیں', en: 'New worker — no reviews yet' },
+  visitFrom: { ur: 'وزٹ', en: 'Visit from' },
+  busyReason: { ur: 'دوسرے کام پر ہیں — یہ ختم ہونے تک نئی بکنگ نہیں لے سکتے', en: 'On another job — can’t take a new booking until it ends' },
+  request: { ur: 'درخواست بھیجیں', en: 'Send request' },
+  describe: { ur: 'مسئلہ بتائیں', en: 'Describe the problem' },
+  address: { ur: 'پتہ (صرف بکنگ پکی ہونے پر کاریگر کو دکھایا جائے گا)', en: 'Address (shown to the worker only after you confirm a booking)' },
+  notVerified: { ur: 'شناخت کی تصدیق نہیں ہوئی — ریویو اور مکمل کام دیکھیں', en: 'Identity not verified — check reviews and completed jobs' },
+  status_requested: { ur: 'نئی درخواست', en: 'Requested' },
+  status_quoted: { ur: 'ریٹ دیا گیا', en: 'Quoted' },
+  status_confirmed: { ur: 'بکنگ پکی', en: 'Confirmed' },
+  status_in_progress: { ur: 'کام جاری', en: 'In progress' },
+  status_awaiting_confirmation: { ur: 'تصدیق باقی', en: 'Awaiting confirmation' },
+  status_completed: { ur: 'مکمل', en: 'Completed' },
+  status_cancelled: { ur: 'منسوخ', en: 'Cancelled' },
+  status_disputed: { ur: 'مسئلہ رپورٹ ہوا', en: 'Problem reported' },
+  sendPrice: { ur: 'ریٹ بھیجیں', en: 'Send price' },
+  yourPrice: { ur: 'آپ کا ریٹ (روپے)', en: 'Your price (Rs)' },
+  partsIncluded: { ur: 'سامان بھی شامل ہے', en: 'Parts included' },
+  note: { ur: 'نوٹ (اختیاری)', en: 'Note (optional)' },
+  waitingCustomer: { ur: 'گاہک کے جواب کا انتظار — قبول کرنے پر ہی بکنگ پکی ہوگی', en: 'Waiting for the customer — nothing is booked until they accept' },
+  waitingWorker: { ur: 'درخواست بھیج دی — کاریگر کے ریٹ کا انتظار', en: 'Request sent — waiting for the worker’s price' },
+  priceFrom: { ur: 'کاریگر کا ریٹ', en: 'Worker’s price' },
+  accept: { ur: 'قبول کریں', en: 'Accept' },
+  decline: { ur: 'منع کریں', en: 'Decline' },
+  confirmBookingQ: { ur: 'یہ ریٹ قبول کر کے بکنگ پکی کریں؟', en: 'Accept this price and confirm the booking?' },
+  confirmBookingBody: { ur: 'کاریگر دوسرے گاہکوں کے لیے ”مصروف“ ہو جائے گا۔ ادائیگی کام کے بعد نقد۔', en: 'The worker becomes Busy for other customers. You pay in cash after the job.' },
+  yesConfirm: { ur: 'ہاں، بکنگ پکی کریں', en: 'Yes, confirm booking' },
+  goBack: { ur: 'واپس جائیں', en: 'Go back' },
+  startJob: { ur: 'کام شروع کریں', en: 'Start job' },
+  jobDone: { ur: 'کام مکمل ہو گیا', en: 'Job done' },
+  jobDoneQ: { ur: 'کیا کام واقعی مکمل ہو گیا؟', en: 'Is the job really finished?' },
+  jobDoneBody: { ur: 'گاہک کو تصدیق کے لیے اطلاع جائے گی۔ تصدیق تک آپ ”مصروف“ رہیں گے۔', en: 'The customer will be asked to confirm. You stay Busy until they do.' },
+  yesDone: { ur: 'ہاں، مکمل ہے', en: 'Yes, it’s done' },
+  notYet: { ur: 'ابھی نہیں', en: 'Not yet' },
+  waitingConfirm: { ur: 'گاہک کی تصدیق کا انتظار', en: 'Waiting for the customer to confirm' },
+  isDone: { ur: 'کیا کام مکمل ہو گیا؟', en: 'Is the work done?' },
+  workerSaysDone: { ur: 'کاریگر نے کام مکمل بتایا ہے', en: 'The worker marked the job as done' },
+  problem: { ur: 'مسئلہ ہے', en: 'There’s a problem' },
+  rate: { ur: 'ریٹنگ دیں', en: 'Rate the worker' },
+  comment: { ur: 'تبصرہ (اختیاری)', en: 'Comment (optional)' },
+  submitReview: { ur: 'ریویو بھیجیں', en: 'Submit review' },
+  chooseStars: { ur: 'ریٹنگ کے لیے ستارہ دبائیں', en: 'Tap a star to rate' },
+  thanksReview: { ur: 'شکریہ! آپ کا ریویو شائع ہو گیا', en: 'Thank you! Your review is posted' },
+  cancelBooking: { ur: 'بکنگ منسوخ کریں', en: 'Cancel booking' },
+  cancelQ: { ur: 'بکنگ منسوخ کریں؟', en: 'Cancel this booking?' },
+  cancelBody: { ur: 'دوسرے فریق کو فوراً اطلاع ہوگی۔ یہ واپس نہیں ہو سکتا۔', en: 'The other person is told right away. This can’t be undone.' },
+  yesCancel: { ur: 'ہاں، منسوخ کریں', en: 'Yes, cancel' },
+  keep: { ur: 'رہنے دیں', en: 'Keep it' },
+  messages: { ur: 'پیغامات', en: 'Messages' },
+  typeMessage: { ur: 'پیغام لکھیں…', en: 'Type a message…' },
+  send: { ur: 'بھیجیں', en: 'Send' },
+  addressLabel: { ur: 'پتہ', en: 'Address' },
+  addressHidden: { ur: 'پتہ بکنگ پکی ہونے پر دکھایا جائے گا', en: 'Address is shown once the booking is confirmed' },
+  agreedPrice: { ur: 'طے شدہ ریٹ', en: 'Agreed price' },
+  cashAfter: { ur: 'ادائیگی کام کے بعد نقد', en: 'Cash after the job' },
+  err_WORKER_BUSY: { ur: 'یہ کاریگر ابھی دوسرے کام پر ہے۔ دوسرا کاریگر چنیں۔', en: 'This worker just got another booking. Please choose another worker.' },
+  err_QUOTE_EXPIRED: { ur: 'یہ ریٹ ختم ہو گیا۔ کاریگر نیا ریٹ بھیجے گا۔', en: 'This price expired. The worker can send a new one.' },
+  err_QUOTE_NOT_CURRENT: { ur: 'ریٹ بدل چکا ہے، صفحہ تازہ ہو گیا۔', en: 'The price changed — showing the latest.' },
+  err_INVALID_TRANSITION: { ur: 'یہ قدم اس وقت ممکن نہیں — صفحہ تازہ کریں۔', en: 'That step isn’t possible right now — refreshing.' },
+  err_ALREADY_REVIEWED: { ur: 'آپ اس کام کا ریویو دے چکے ہیں۔', en: 'You already reviewed this job.' },
+  err_OPEN_REQUEST_EXISTS: { ur: 'اس کاریگر کو آپ کی درخواست پہلے سے کھلی ہے۔', en: 'You already have an open request with this worker.' },
+  err_NETWORK: { ur: 'انٹرنیٹ نہیں۔ دوبارہ کوشش کریں — آپ کا لکھا محفوظ ہے۔', en: 'No internet. Try again — what you entered is kept.' },
+  err_UNKNOWN: { ur: 'کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔', en: 'Something went wrong. Please try again.' },
+  configMissing: { ur: 'سیٹ اپ مکمل نہیں: Supabase کی تفصیل .env.local میں درج کریں', en: 'Setup incomplete: add Supabase values to .env.local' },
+} as const
+
+export type Key = keyof typeof dict
+
+const Ctx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: Key) => string }>({
+  lang: 'ur', setLang: () => {}, t: (k) => dict[k].ur,
+})
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('rr-lang') as Lang) || 'ur')
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.documentElement.dir = lang === 'ur' ? 'rtl' : 'ltr'
+    try { localStorage.setItem('rr-lang', lang) } catch { /* storage unavailable */ }
+  }, [lang])
+  const t = (k: Key) => dict[k]?.[lang] ?? String(k)
+  return <Ctx.Provider value={{ lang, setLang, t }}>{children}</Ctx.Provider>
+}
+
+export const useI18n = () => useContext(Ctx)
+
+export function tErr(t: (k: Key) => string, code: string) {
+  const k = `err_${code}` as Key
+  return k in dict ? t(k) : t('err_UNKNOWN')
+}
