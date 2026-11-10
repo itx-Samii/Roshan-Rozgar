@@ -1,0 +1,31 @@
+# Dependencies & builds
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Environment & secrets — never commit real values (use .env.example)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# Test artefacts
+playwright-report/
+test-results/
+
+# Editor / OS / tooling
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+.claude/
