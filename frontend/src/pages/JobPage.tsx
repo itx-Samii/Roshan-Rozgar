@@ -1,43 +1,59 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, Check, MapPin, Send } from 'lucide-react'
+import { ArrowDown, Check, MapPin, Send, Wrench } from 'lucide-react'
 import { Alert, Button, Card, Dialog, Spinner, StatusBadge, TopBar } from '../components/ui'
 import { PricePicker, Segmented, VoiceField } from '../components/inputs'
 import { useNotify } from '../components/notify'
+import { AppShell, Avatar } from '../components/shell'
 import { useI18n, tErr, type Key } from '../lib/i18n'
 import { supabase, rpc, errorCode, type JobStatus } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { nameOf, useRefData, type Job, type Quote } from '../lib/data'
 
 type Pending = null | { kind: 'accept' | 'done' | 'cancel'; quoteId?: string }
-const STEPS: { key: Key; reached: JobStatus[] }[] = [
-  { key: 'step_request', reached: ['requested', 'quoted', 'confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
-  { key: 'step_price', reached: ['quoted', 'confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
-  { key: 'step_booked', reached: ['confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
-  { key: 'step_work', reached: ['in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
-  { key: 'step_done', reached: ['completed'] },
+const STEPS: { st: JobStatus; reached: JobStatus[] }[] = [
+  { st: 'requested', reached: ['requested', 'quoted', 'confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
+  { st: 'quoted', reached: ['quoted', 'confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
+  { st: 'confirmed', reached: ['confirmed', 'in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
+  { st: 'in_progress', reached: ['in_progress', 'awaiting_confirmation', 'completed', 'disputed'] },
+  { st: 'completed', reached: ['completed'] },
 ]
 
-function Journey({ status }: { status: JobStatus }) {
-  const { t } = useI18n()
-  if (status === 'cancelled') return null
-  const current = STEPS.findLastIndex((s) => s.reached.includes(status))
+/** Vertical progress timeline (Figma C8): each step shows when it happened. */
+function Timeline({ job, history }: { job: Job; history: { to_status: JobStatus; created_at: string }[] }) {
+  const { t, lang } = useI18n()
+  if (job.status === 'cancelled') return null
+  const current = STEPS.findLastIndex((s) => s.reached.includes(job.status))
+  const when = (st: JobStatus) => {
+    const iso = st === 'requested' ? job.created_at : history.find((h) => h.to_status === st)?.created_at
+    return iso ? new Date(iso).toLocaleString(lang === 'ur' ? 'ur-PK' : 'en-PK', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }) : ''
+  }
   return (
-    <ol className="flex items-start" aria-label="Progress">
-      {STEPS.map((s, i) => {
-        const done = i < current || status === 'completed'; const here = i === current && status !== 'completed'
-        return (
-          <li key={s.key} aria-current={here ? 'step' : undefined} className="flex-1 flex flex-col items-center gap-1 relative">
-            {i > 0 && <span className={`absolute top-4 end-1/2 w-full h-1 -z-0 ${i <= current ? 'bg-brand' : 'bg-muted'}`} aria-hidden />}
-            <span className={`relative z-10 size-8 rounded-full grid place-items-center text-sm font-bold en ${done ? 'bg-brand text-white' : here ? 'bg-accent text-ink ring-4 ring-accent-subtle' : 'bg-muted text-ink-3'}`}>
-              {done ? <Check className="size-4" aria-hidden /> : i + 1}
-            </span>
-            <span className={`text-xs text-center ${here ? 'font-bold text-ink' : 'text-ink-2'}`}>{t(s.key)}</span>
-          </li>
-        )
-      })}
-    </ol>
+    <Card className="p-5">
+      <h2 className="font-bold mb-3">{t('progress')}</h2>
+      <ol aria-label={t('progress')}>
+        {STEPS.map((s, i) => {
+          const ongoing = s.st === 'in_progress' && ['in_progress', 'awaiting_confirmation'].includes(job.status)
+          const here = ongoing; const done = i <= current && !ongoing
+          const last = i === STEPS.length - 1
+          return (
+            <li key={s.st} aria-current={here ? 'step' : undefined} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span className={`size-8 rounded-full grid place-items-center shrink-0 ${done ? 'bg-brand text-white' : here ? 'bg-accent text-ink ring-4 ring-accent-subtle' : 'bg-muted text-ink-3'}`}>
+                  {done ? <Check className="size-4" aria-hidden /> : here ? <Wrench className="size-4" aria-hidden /> : <span className="size-2 rounded-full bg-ink-3" />}
+                </span>
+                {!last && <span className={`w-0.5 flex-1 min-h-6 ${i < current ? 'bg-brand' : 'bg-muted'}`} aria-hidden />}
+              </div>
+              <div className={`pb-4 ${!done && !here ? 'text-ink-3' : ''}`}>
+                <div className={here ? 'font-extrabold' : 'font-semibold'}>{t(`status_${s.st === 'in_progress' && job.status === 'awaiting_confirmation' ? 'awaiting_confirmation' : s.st}` as Key)}</div>
+                {(done || here) && <div className="text-sm text-ink-2 en">{when(s.st)}</div>}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </Card>
   )
 }
 
@@ -61,16 +77,17 @@ export default function JobPage() {
     const { data: job, error: e1 } = await supabase.from('jobs').select('*').eq('id', id!).single()
     if (e1) throw e1
     const j = job as Job
-    const [quotes, priv, people, messages, review] = await Promise.all([
+    const [quotes, priv, people, messages, review, history] = await Promise.all([
       supabase.from('job_quotes').select('*').eq('job_id', j.id).order('created_at', { ascending: false }),
       supabase.from('job_private').select('address').eq('job_id', j.id).maybeSingle(),
       supabase.from('profiles').select('id, display_name').in('id', [j.customer_id, j.worker_id]),
       supabase.from('job_messages').select('id, sender_id, body, created_at').eq('job_id', j.id).order('created_at'),
       supabase.from('reviews').select('rating, comment').eq('job_id', j.id).maybeSingle(),
+      supabase.from('job_status_history').select('to_status, created_at').eq('job_id', j.id).order('created_at'),
     ])
     return { job: j, quotes: (quotes.data ?? []) as Quote[], address: priv.data?.address as string | undefined,
       names: Object.fromEntries((people.data ?? []).map((p) => [p.id, p.display_name])) as Record<string, string>,
-      messages: messages.data ?? [], review: review.data }
+      messages: messages.data ?? [], review: review.data, history: (history.data ?? []) as { to_status: JobStatus; created_at: string }[] }
   } })
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -86,7 +103,7 @@ export default function JobPage() {
 
   if (q.isLoading) return <Spinner />
   if (q.error || !q.data) return <div className="max-w-xl mx-auto p-6 flex flex-col gap-4"><Alert>{tErr(t, errorCode(q.error))}</Alert><Button variant="secondary" onClick={() => nav('/')}>{t('goHome')}</Button></div>
-  const { job, quotes, address, names, messages, review } = q.data
+  const { job, quotes, address, names, messages, review, history } = q.data
   const isWorker = job.worker_id === uid
   const other = names[isWorker ? job.customer_id : job.worker_id] ?? ''
   const pending = quotes.find((x) => x.status === 'pending')
@@ -161,11 +178,11 @@ export default function JobPage() {
 
   const details = (
     <Card className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2"><span className="text-lg font-bold">{other}</span><StatusBadge status={job.status} /></div>
+      <div className="flex items-center gap-3"><Avatar name={other} /><div className="flex-1 min-w-0"><div className="text-lg font-bold truncate">{other}</div><div className="text-sm text-ink-2">{isWorker ? t('roleCustomer') : nameOf(categories.find((c) => c.id === job.category_id), lang)}</div></div><StatusBadge status={job.status} /></div>
       <p className="text-lg">{job.problem}</p>
       <p className="text-ink-2 flex items-center gap-2"><MapPin className="size-4 shrink-0" aria-hidden />{nameOf(areas.find((a) => a.id === job.area_id), lang)}</p>
       <p className="text-sm">{address ? <><b>{t('addressLabel')}:</b> {address}</> : <span className="text-ink-2">{t('addressHidden')}</span>}</p>
-      {accepted && <p className="rounded-xl bg-brand-subtle px-3 py-2"><b>{t('agreedPrice')}:</b> <span className="en font-bold">Rs {accepted.amount_pkr.toLocaleString('en-PK')}</span> · {t('cashAfter')}</p>}
+      {accepted && <div className="rounded-xl bg-brand-subtle px-4 py-3 flex items-center justify-between gap-3"><div><div className="font-bold text-brand-hover">{t('agreedPrice')}</div><div className="text-sm text-ink-2">{t('cashAfter')} · {accepted.includes_parts ? t('withParts') : t('visitLabour')}</div></div><div className="en text-2xl font-extrabold whitespace-nowrap">Rs {accepted.amount_pkr.toLocaleString('en-PK')}</div></div>}
     </Card>
   )
 
@@ -192,11 +209,10 @@ export default function JobPage() {
   )
 
   return (
-    <div className="min-h-dvh">
+    <AppShell>
       <div className="max-w-6xl mx-auto"><TopBar title={nameOf(categories.find((c) => c.id === job.category_id), lang)} /></div>
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-8 items-start">
         <aside className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
-          <Journey status={job.status} />
           {hasNext && (t(nextKey) !== nextKey) && (
             <div className="rounded-2xl bg-accent-subtle border border-accent px-4 py-3 flex gap-3 items-start" role="status">
               <ArrowDown className="size-5 text-accent-text shrink-0 mt-1" aria-hidden />
@@ -207,7 +223,7 @@ export default function JobPage() {
           {action}
           {canCancel && <Button variant="tertiary" onClick={() => setDialog({ kind: 'cancel' })}>{job.status === 'confirmed' ? t('cancelBooking') : t('cancelRequest')}</Button>}
         </aside>
-        <main className="flex flex-col gap-5 lg:col-start-1 lg:row-start-1">{details}{chat}</main>
+        <main className="flex flex-col gap-5 lg:col-start-1 lg:row-start-1">{details}<Timeline job={job} history={history} />{chat}</main>
       </div>
 
       <Dialog open={dialog?.kind === 'accept'} title={t('confirmBookingQ')} body={t('confirmBookingBody')} confirmLabel={t('yesConfirm')} cancelLabel={t('goBack')} loading={busy}
@@ -216,6 +232,6 @@ export default function JobPage() {
         onConfirm={() => run(() => rpc('job_action', { p_job: job.id, p_action: 'done' }))} onCancel={() => setDialog(null)} />
       <Dialog open={dialog?.kind === 'cancel'} danger title={t('cancelQ')} body={t('cancelBody')} confirmLabel={t('yesCancel')} cancelLabel={t('keep')} loading={busy}
         onConfirm={() => run(() => rpc('job_action', { p_job: job.id, p_action: 'cancel' }))} onCancel={() => setDialog(null)} />
-    </div>
+    </AppShell>
   )
 }

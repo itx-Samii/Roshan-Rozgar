@@ -16,6 +16,9 @@ import CustomerHome from './pages/CustomerHome'
 import WorkerList from './pages/WorkerList'
 import RequestWorker from './pages/RequestWorker'
 import JobPage from './pages/JobPage'
+import WorkerRequests from './pages/WorkerRequests'
+import JobsList from './pages/JobsList'
+import Profile from './pages/Profile'
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } })
 
@@ -49,6 +52,11 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/w" element={<Guard role="worker"><WorkerHome /></Guard>} />
+          <Route path="/w/requests" element={<Guard role="worker"><WorkerRequests /></Guard>} />
+          <Route path="/w/jobs" element={<Guard role="worker"><JobsList /></Guard>} />
+          <Route path="/w/profile" element={<Guard role="worker"><Profile /></Guard>} />
+          <Route path="/c/bookings" element={<Guard role="customer"><JobsList /></Guard>} />
+          <Route path="/c/profile" element={<Guard role="customer"><Profile /></Guard>} />
           <Route path="/w/onboarding" element={<Guard role="worker"><WorkerOnboarding /></Guard>} />
           <Route path="/c" element={<Guard role="customer"><CustomerHome /></Guard>} />
           <Route path="/c/workers" element={<Guard role="customer"><WorkerList /></Guard>} />

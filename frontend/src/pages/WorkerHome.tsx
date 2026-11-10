@@ -1,13 +1,14 @@
 import { Link, Navigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, LogOut, Power } from 'lucide-react'
-import { Alert, Card, LangSwitch, Screen, Spinner, StatusBadge, TopBar } from '../components/ui'
-import { useI18n, tErr } from '../lib/i18n'
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Eye, EyeOff, Inbox, Power, Star, Wallet, BadgeCheck } from 'lucide-react'
+import { Alert, Card, LangSwitch, Spinner, StatusBadge } from '../components/ui'
+import { ACTIVE_STATUSES, AppShell, Avatar, Page, useMyJobs, useNames } from '../components/shell'
+import { useI18n, tErr, type Key } from '../lib/i18n'
 import { supabase, rpc, errorCode } from '../lib/supabase'
 import { useAuth, useProfile } from '../lib/auth'
-import { nameOf, useRefData, type Job } from '../lib/data'
+import { nameOf, useRefData } from '../lib/data'
 
-const ACTIVE = ['confirmed', 'in_progress', 'awaiting_confirmation']
+type Avail = 'available' | 'busy' | 'offline'
 
 export default function WorkerHome() {
   const { t, lang } = useI18n()
@@ -17,51 +18,121 @@ export default function WorkerHome() {
   const { categories } = useRefData()
   const uid = session!.user.id
   const wp = useQuery({ queryKey: ['worker', uid], queryFn: async () => {
-    const { data, error } = await supabase.from('worker_profiles').select('manual_availability, onboarded_at').eq('user_id', uid).single(); if (error) throw error; return data } })
-  const jobs = useQuery({ queryKey: ['jobs', 'worker', uid], refetchInterval: 5000, queryFn: async () => {
-    const { data, error } = await supabase.from('jobs').select('*').eq('worker_id', uid).order('updated_at', { ascending: false }).limit(30); if (error) throw error; return data as Job[] } })
+    const { data, error } = await supabase.from('worker_profiles').select('manual_availability, onboarded_at, visit_fee_from').eq('user_id', uid).single(); if (error) throw error; return data } })
+  const rating = useQuery({ queryKey: ['myRating', uid], queryFn: async () => {
+    const { data } = await supabase.from('reviews').select('rating').eq('worker_id', uid); const r = data ?? []
+    return { avg: r.length ? r.reduce((s, x) => s + x.rating, 0) / r.length : null, n: r.length } } })
+  const jobsQ = useMyJobs()
   const setAvail = useMutation({ mutationFn: (s: 'available' | 'offline') => rpc('set_availability', { p_status: s }), onSuccess: () => qc.invalidateQueries({ queryKey: ['worker', uid] }) })
+  const jobs = jobsQ.data ?? []
+  const names = useNames(jobs.map((j) => j.customer_id))
 
-  if (wp.isLoading || jobs.isLoading) return <Spinner />
+  if (wp.isLoading || jobsQ.isLoading) return <AppShell><Spinner /></AppShell>
   if (wp.data && !wp.data.onboarded_at && !wp.isFetching) return <Navigate to="/w/onboarding" replace />
-  const busy = (jobs.data ?? []).some((j) => ACTIVE.includes(j.status))
-  const manual = wp.data?.manual_availability as 'available' | 'offline'
-  const open = (jobs.data ?? []).filter((j) => !['completed', 'cancelled'].includes(j.status))
-  const closed = (jobs.data ?? []).filter((j) => ['completed', 'cancelled'].includes(j.status)).slice(0, 5)
+  const active = jobs.find((j) => ACTIVE_STATUSES.includes(j.status))
+  const current: Avail = active ? 'busy' : (wp.data?.manual_availability as Avail)
+  const fresh = jobs.filter((j) => j.status === 'requested')
+  const done = jobs.filter((j) => j.status === 'completed').length
+  const Go = lang === 'ur' ? ArrowLeft : ArrowRight
+  const name = profile.data?.display_name ?? ''
 
-  const tile = (v: 'available' | 'offline', Icon: typeof Power, on: string) => {
-    const selected = !busy && manual === v
-    return (
-      <button role="radio" aria-checked={selected} aria-label={t(v)} disabled={busy || setAvail.isPending} onClick={() => setAvail.mutate(v)}
-        className={`flex-1 rounded-2xl p-4 flex flex-col items-center gap-2 border-2 min-h-28 ${selected ? `${on} border-transparent text-white` : 'bg-surface border-muted'} disabled:opacity-60`}>
-        <Icon className="size-8" aria-hidden /><span className="font-bold">{t(v)}</span>
-      </button>
-    )
-  }
+  const tiles: { v: Avail; Icon: typeof Power; sub: Key }[] = [
+    { v: 'available', Icon: CheckCircle2, sub: 'avail_sub' },
+    { v: 'busy', Icon: Clock, sub: 'busy_sub' },
+    { v: 'offline', Icon: Power, sub: 'offline_sub' },
+  ]
+  const tileCls: Record<Avail, string> = { available: 'bg-brand text-white', busy: 'bg-accent text-ink', offline: 'bg-ink text-white' }
+  const iconCls: Record<Avail, string> = { available: 'bg-brand-subtle text-brand', busy: 'bg-accent-subtle text-accent-text', offline: 'bg-muted text-ink-2' }
 
   return (
-    <Screen wide>
-      <TopBar title={profile.data?.display_name ?? ''} back={false} end={<><LangSwitch /><button aria-label={t('logout')} onClick={() => supabase.auth.signOut()} className="size-12 grid place-items-center"><LogOut className="size-5" /></button></>} />
-      <div className="grid gap-6 lg:grid-cols-[400px_minmax(0,1fr)] items-start">
-      <section aria-labelledby="st" className="flex flex-col gap-3 lg:sticky lg:top-20">
-        <h2 id="st" className="text-xl font-bold">{t('yourStatus')}</h2>
-        <div className="flex gap-3" role="radiogroup">{tile('available', CheckCircle2, 'bg-brand')}{tile('offline', Power, 'bg-ink')}</div>
-        {busy ? <Alert kind="warning">{t('busyHint')}</Alert> : <Alert kind={manual === 'available' ? 'success' : 'info'}>{manual === 'available' ? t('availableHint') : t('offlineHint')}</Alert>}
-        {setAvail.error && <Alert>{tErr(t, errorCode(setAvail.error))}</Alert>}
-      </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold">{t('requests')}</h2>
-        {!open.length && <Card className="text-center text-ink-2">{t('noRequests')}</Card>}
-        {[...open, ...closed].map((j) => (
-          <Link key={j.id} to={`/job/${j.id}`}>
-            <Card className="flex flex-col gap-2 hover:border-brand border-2">
-              <div className="flex items-center justify-between gap-2"><span className="font-bold">{nameOf(categories.find((c) => c.id === j.category_id), lang)}</span><StatusBadge status={j.status} /></div>
-              <p className="text-ink-2 line-clamp-2">{j.problem}</p>
-            </Card>
-          </Link>
-        ))}
-      </section>
-      </div>
-    </Screen>
+    <AppShell>
+      <Page>
+        <header className="flex items-center gap-3">
+          <Avatar name={name} size="size-14" text="text-lg" />
+          <div className="flex-1 min-w-0"><div className="text-sm text-ink-2">{t('salaam')}</div><h1 className="text-2xl font-extrabold truncate">{name}</h1></div>
+          <LangSwitch />
+        </header>
+
+        <div className="grid gap-5 lg:grid-cols-2 items-start">
+          <Card className="flex flex-col gap-4 p-5">
+            <h2 className="text-lg font-bold">{t('yourStatus')}</h2>
+            <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t('yourStatus')}>
+              {tiles.map(({ v, Icon, sub }) => {
+                const sel = current === v
+                const disabled = v === 'busy' || !!active || setAvail.isPending
+                return (
+                  <button key={v} role="radio" aria-checked={sel} aria-label={t(v)} disabled={disabled} onClick={() => v !== 'busy' && setAvail.mutate(v)}
+                    className={`relative rounded-2xl p-3 min-h-32 flex flex-col items-center justify-center gap-2 text-center border-2 transition-colors ${sel ? `${tileCls[v]} border-transparent shadow-md` : 'bg-surface border-muted hover:border-line-strong'} ${disabled && !sel ? 'opacity-60' : ''}`}>
+                    <span className={`size-11 rounded-full grid place-items-center ${sel ? 'bg-white/20' : iconCls[v]}`}><Icon className="size-6" aria-hidden /></span>
+                    <span className="font-bold leading-tight">{t(v)}</span>
+                    <span className={`text-xs ${sel ? 'opacity-90' : 'text-ink-2'}`}>{t(sub)}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className={`rounded-xl px-4 py-3 flex gap-3 items-start ${current === 'available' ? 'bg-brand-subtle text-brand-hover' : current === 'busy' ? 'bg-accent-subtle text-accent-text' : 'bg-subtle text-ink-2'}`}>
+              {current === 'offline' ? <EyeOff className="size-5 shrink-0 mt-0.5" aria-hidden /> : <Eye className="size-5 shrink-0 mt-0.5" aria-hidden />}
+              <span className="font-semibold">{current === 'busy' ? t('busyHint') : current === 'available' ? t('availableHint') : t('offlineHint')}</span>
+            </div>
+            {setAvail.error && <Alert>{tErr(t, errorCode(setAvail.error))}</Alert>}
+          </Card>
+
+          <div className="flex flex-col gap-5">
+            {active && (
+              <Link to={`/job/${active.id}`} className="block">
+                <Card className="border-2 border-accent flex flex-col gap-3 p-5 hover:shadow-md">
+                  <div className="flex items-center justify-between gap-2"><span className="text-sm font-bold text-accent-text">{t('activeJob')}</span><StatusBadge status={active.status} /></div>
+                  <div className="flex items-center gap-3"><Avatar name={names[active.customer_id] ?? ''} /><div className="min-w-0"><div className="font-bold">{names[active.customer_id]}</div><div className="text-ink-2 truncate">{active.problem}</div></div></div>
+                  <span className="min-h-12 rounded-xl bg-accent text-ink font-bold inline-flex items-center justify-center gap-2">{t('openJob')}<Go className="size-5" aria-hidden /></span>
+                </Card>
+              </Link>
+            )}
+
+            {fresh.length ? (
+              <Card className="border-2 border-brand flex flex-col gap-4 p-5">
+                <div className="flex items-center gap-3">
+                  <span className="size-12 rounded-full bg-brand-subtle text-brand grid place-items-center shrink-0"><Inbox className="size-6" aria-hidden /></span>
+                  <div><div className="text-xl font-extrabold"><span className="num">{fresh.length}</span> {t('newRequests')}</div><div className="text-sm text-ink-2">{t('replySoon')}</div></div>
+                </div>
+                <Link to="/w/requests" className="min-h-14 rounded-xl bg-brand text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-brand-hover">{t('seeRequests')}<Go className="size-5" aria-hidden /></Link>
+              </Card>
+            ) : !active && (
+              <Card className="flex items-center gap-3 p-5">
+                <span className="size-12 rounded-full bg-subtle text-ink-2 grid place-items-center shrink-0"><Inbox className="size-6" aria-hidden /></span>
+                <div><div className="font-bold">{t('noNewRequests')}</div><div className="text-sm text-ink-2">{t('noNewRequestsSub')}</div></div>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { Icon: Wallet, v: wp.data?.visit_fee_from ? `Rs ${wp.data.visit_fee_from}` : '—', k: 'stat_fee' as Key },
+                { Icon: BadgeCheck, v: String(done), k: 'stat_jobs' as Key },
+                { Icon: Star, v: rating.data?.avg ? rating.data.avg.toFixed(1) : '—', k: 'stat_rating' as Key },
+              ].map(({ Icon, v, k }) => (
+                <Card key={k} className="flex flex-col items-center gap-1 p-3 text-center">
+                  <span className="inline-flex items-center gap-1 text-lg font-extrabold en">{v}<Icon className="size-4 text-brand" aria-hidden /></span>
+                  <span className="text-xs text-ink-2">{t(k)}</span>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {!!jobs.length && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-bold">{t('requests')}</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              {jobs.slice(0, 4).map((j) => (
+                <Link key={j.id} to={`/job/${j.id}`}><Card className="flex items-center gap-3 border-2 hover:border-brand">
+                  <Avatar name={names[j.customer_id] ?? ''} size="size-10" text="text-sm" />
+                  <div className="flex-1 min-w-0"><div className="font-bold truncate">{names[j.customer_id]} · {nameOf(categories.find((c) => c.id === j.category_id), lang)}</div><div className="text-sm text-ink-2 truncate">{j.problem}</div></div>
+                  <StatusBadge status={j.status} />
+                </Card></Link>
+              ))}
+            </div>
+          </section>
+        )}
+      </Page>
+    </AppShell>
   )
 }
