@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { Check, Mic, Square } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, ArrowRight, BadgeCheck, Briefcase, Check, Mic, Square, Wrench } from 'lucide-react'
 import { Alert, Button, Card, Chip, Screen, Spinner, TopBar, tradeIcons, tradeTint } from '../components/ui'
 import { useI18n, tErr } from '../lib/i18n'
 import { nameOf, useDictation, useRefData, YEAR_RANGES as YEARS } from '../lib/data'
-import { rpc, errorCode } from '../lib/supabase'
-import { useProfile } from '../lib/auth'
+import { rpc, errorCode, supabase } from '../lib/supabase'
+import { useAuth, useProfile } from '../lib/auth'
 
 const FEES = [300, 500, 800, 1000]
 
@@ -17,7 +17,10 @@ export default function WorkerOnboarding() {
   const profile = useProfile()
   const { categories, areas, loading } = useRefData()
   const dict = useDictation(lang)
-  const [step, setStep] = useState(1)
+  const { session } = useAuth()
+  const [params] = useSearchParams()
+  const editing = params.get('edit') === '1'
+  const [step, setStep] = useState(editing ? 1 : 0)
   const [cats, setCats] = useState<number[]>([])
   const [name, setName] = useState('')
   const [years, setYears] = useState<number | null>(null)
@@ -27,23 +30,58 @@ export default function WorkerOnboarding() {
   const [error, setError] = useState<string | null>(null)
   const toggle = (arr: number[], v: number) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
   const displayName = name || profile.data?.display_name || ''
+  const uid = session?.user.id
+  // Edit mode: start from what the worker already saved
+  const current = useQuery({ queryKey: ['workerFull', uid, 'edit'], enabled: editing && !!uid, queryFn: async () => {
+    const [wp, sv, ar] = await Promise.all([
+      supabase.from('worker_profiles').select('years_experience, visit_fee_from').eq('user_id', uid!).single(),
+      supabase.from('worker_services').select('category_id').eq('worker_id', uid!),
+      supabase.from('worker_areas').select('area_id').eq('worker_id', uid!),
+    ])
+    return { years: wp.data?.years_experience ?? null, fee: wp.data?.visit_fee_from ?? null, cats: (sv.data ?? []).map((x) => x.category_id), areas: (ar.data ?? []).map((x) => x.area_id) }
+  } })
+  useEffect(() => {
+    if (!current.data) return
+    setCats(current.data.cats); setAreaIds(current.data.areas); setYears(current.data.years); setFee(current.data.fee)
+  }, [current.data])
+  const Go = lang === 'ur' ? ArrowLeft : ArrowRight
 
-  if (loading) return <Spinner />
+  if (loading || (editing && current.isLoading)) return <Spinner />
 
   const save = async () => {
     setBusy(true); setError(null)
     try {
       await rpc('complete_onboarding', { p_name: displayName, p_years: years ?? 0, p_fee: fee, p_categories: cats, p_areas: areaIds })
       // Drop the cached "not onboarded" worker row so the dashboard doesn't bounce back here
-      await qc.resetQueries({ queryKey: ['worker'] }); await qc.invalidateQueries(); nav('/w', { replace: true })
+      await qc.resetQueries({ queryKey: ['worker'] }); await qc.invalidateQueries(); nav(editing ? '/w/profile' : '/w', { replace: true })
     } catch (e) { setError(tErr(t, errorCode(e))) } finally { setBusy(false) }
   }
 
-  const progress = <div className="flex gap-2" aria-label={`${step} / 3`}>{[1, 2, 3].map((i) => <span key={i} className={`h-2 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-muted'}`} />)}</div>
+  const progress = (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-semibold text-ink-2">{t('stepWord')} <span className="num">{step}</span> {t('ofWord')} <span className="num">3</span></span>
+      <div className="flex gap-2" aria-hidden>{[1, 2, 3].map((i) => <span key={i} className={`h-2 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-muted'}`} />)}</div>
+    </div>
+  )
+
+  if (step === 0) return (
+    <Screen footer={<><Button onClick={() => setStep(1)}>{t('start')}<Go className="size-5" aria-hidden /></Button><p className="text-center text-sm text-ink-2">{t('takes3min')}</p></>}>
+      <TopBar title={t('welcomeTitle')} back={false} />
+      <div><h1 className="text-3xl font-extrabold">{t('welcomeTitle')}</h1><p className="text-ink-2 mt-1">{t('welcomeSub')}</p></div>
+      <Card className="flex flex-col gap-4 p-5">
+        {([[Wrench, 'w_step1'], [Mic, 'w_step2'], [BadgeCheck, 'w_step3'], [Briefcase, 'w_step4']] as const).map(([Icon, k], i) => (
+          <div key={k} className="flex items-center gap-3">
+            <span className="size-9 rounded-full bg-brand text-white font-bold grid place-items-center en shrink-0">{i + 1}</span>
+            <Icon className="size-5 text-brand shrink-0" aria-hidden /><span className="font-semibold text-lg">{t(k)}</span>
+          </div>
+        ))}
+      </Card>
+    </Screen>
+  )
 
   if (step === 1) return (
     <Screen footer={<Button disabled={!cats.length} onClick={() => setStep(2)}>{t('continue')}</Button>}>
-      <TopBar title={t('chooseTrade')} back={false} />
+      <TopBar title={t('chooseTrade')} back={editing} />
       {progress}
       <p className="text-ink-2">{t('chooseTradeSub')}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -96,7 +134,7 @@ export default function WorkerOnboarding() {
     [t('visitFee'), fee ? `Rs ${fee}` : '—'],
   ]
   return (
-    <Screen footer={<><Button loading={busy} onClick={save}>{t('allCorrect')}</Button><Button variant="tertiary" onClick={() => setStep(2)}>{t('change')}</Button></>}>
+    <Screen footer={<><Button loading={busy} onClick={save}>{editing ? t('saveChanges') : t('allCorrect')}</Button><Button variant="tertiary" onClick={() => setStep(2)}>{t('change')}</Button></>}>
       <TopBar title={t('checkTitle')} />
       {progress}
       {error && <Alert>{error}</Alert>}

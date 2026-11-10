@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, Check, MapPin, Send, Wrench } from 'lucide-react'
+import { ArrowDown, Banknote, CalendarCheck, Check, CheckCircle2, Hash, MapPin, Navigation, Send, User, Wrench } from 'lucide-react'
 import { Alert, Button, Card, Dialog, Spinner, StatusBadge, TopBar } from '../components/ui'
 import { PricePicker, Segmented, VoiceField } from '../components/inputs'
 import { useNotify } from '../components/notify'
@@ -70,7 +70,7 @@ export default function JobPage() {
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [price, setPrice] = useState(1000); const [parts, setParts] = useState<'labour' | 'parts'>('labour'); const [note, setNote] = useState('')
-  const [rating, setRating] = useState(0); const [comment, setComment] = useState('')
+  const [rating, setRating] = useState(0); const [comment, setComment] = useState(''); const [tags, setTags] = useState<Key[]>([])
   const [msg, setMsg] = useState('')
 
   const q = useQuery({ queryKey: ['job', id], refetchInterval: 4000, queryFn: async () => {
@@ -111,6 +111,7 @@ export default function JobPage() {
   const closed = ['completed', 'cancelled'].includes(job.status)
   const canCancel = ['requested', 'quoted', 'confirmed'].includes(job.status)
   const nextKey = `next_${isWorker ? 'w' : 'c'}_${job.status}` as Key
+  const bookingNo = `RR-${job.id.slice(0, 6).toUpperCase()}`
   const hasNext = !closed || (!isWorker && job.status === 'completed' && !review)
 
   // ---- the ONE primary action for this role + status ----
@@ -144,6 +145,25 @@ export default function JobPage() {
         <Button variant="secondary" disabled={busy} onClick={() => run(() => rpc('respond_quote', { p_quote: pending.id, p_accept: false }))}>{t('decline')}</Button>
       </Card>
     )
+  } else if (!isWorker && job.status === 'confirmed' && accepted) {
+    const rowsC: [typeof Hash, Key, ReactNode][] = [
+      [Hash, 'bookingId', <span className="en">{bookingNo}</span>],
+      [User, 'roleWorker', `${other} · ${nameOf(categories.find((c) => c.id === job.category_id), lang)}`],
+      [Banknote, 'agreedPrice', <span className="en font-bold">Rs {accepted.amount_pkr.toLocaleString('en-PK')}</span>],
+      [CalendarCheck, 'payment', t('payCash')],
+      [MapPin, 'addressLabel', <>{address}<div className="text-xs text-ink-2">{t('addressShared')}</div></>],
+    ]
+    action = (
+      <Card className="flex flex-col gap-4 p-5">
+        <div className="flex flex-col items-center text-center gap-2">
+          <span className="size-16 rounded-full bg-brand-subtle text-brand grid place-items-center"><CheckCircle2 className="size-9" aria-hidden /></span>
+          <h2 className="text-2xl font-extrabold">{t('bookingConfirmed')}</h2>
+        </div>
+        <dl className="flex flex-col gap-3">{rowsC.map(([Icon, k, v]) => (
+          <div key={k} className="flex gap-3"><Icon className="size-5 text-ink-2 shrink-0 mt-1" aria-hidden /><div><dt className="text-sm text-ink-2">{t(k)}</dt><dd className="font-semibold">{v}</dd></div></div>
+        ))}</dl>
+      </Card>
+    )
   } else if (isWorker && job.status === 'confirmed') {
     action = <Button loading={busy} onClick={() => run(() => rpc('job_action', { p_job: job.id, p_action: 'start' }))}>{t('startJob')}</Button>
   } else if (isWorker && job.status === 'in_progress') {
@@ -164,8 +184,13 @@ export default function JobPage() {
           {[1, 2, 3, 4, 5].map((i) => <button key={i} role="radio" aria-checked={rating === i} aria-label={`${i} / 5`} onClick={() => setRating(i)} className={`size-14 text-4xl ${i <= rating ? 'text-accent' : 'text-line-strong'}`}>★</button>)}
         </div>
         {!rating && <p className="text-center text-ink-2">{t('chooseStars')}</p>}
-        <VoiceField label={t('comment')} value={comment} onChange={setComment} maxLength={1000} />
-        <Button loading={busy} disabled={!rating} onClick={() => run(() => rpc('submit_review', { p_job: job.id, p_rating: rating, p_comment: comment }))}>{t('submitReview')}</Button>
+        <div className="flex flex-col gap-2"><span className="font-semibold">{t('wentWell')}</span>
+          <div className="flex flex-wrap gap-2">{(['tag_ontime', 'tag_price', 'tag_clean', 'tag_polite', 'tag_explained'] as Key[]).map((k) => (
+            <button key={k} type="button" role="checkbox" aria-checked={tags.includes(k)} onClick={() => setTags((x) => x.includes(k) ? x.filter((y) => y !== k) : [...x, k])}
+              className={`min-h-11 rounded-full px-4 font-semibold inline-flex items-center gap-1 border-2 ${tags.includes(k) ? 'bg-brand-subtle border-brand text-brand-hover' : 'bg-surface border-line text-ink'}`}>{tags.includes(k) && <Check className="size-4" aria-hidden />}{t(k)}</button>
+          ))}</div></div>
+        <VoiceField label={t('comment')} value={comment} onChange={setComment} maxLength={800} />
+        <Button loading={busy} disabled={!rating} onClick={() => run(() => rpc('submit_review', { p_job: job.id, p_rating: rating, p_comment: [tags.map((k) => t(k)).join(' · '), comment.trim()].filter(Boolean).join(' — ') }))}>{t('submitReview')}</Button>
       </Card>
     )
   } else if (review) {
@@ -182,6 +207,10 @@ export default function JobPage() {
       <p className="text-lg">{job.problem}</p>
       <p className="text-ink-2 flex items-center gap-2"><MapPin className="size-4 shrink-0" aria-hidden />{nameOf(areas.find((a) => a.id === job.area_id), lang)}</p>
       <p className="text-sm">{address ? <><b>{t('addressLabel')}:</b> {address}</> : <span className="text-ink-2">{t('addressHidden')}</span>}</p>
+      {address && isWorker && !closed && (
+        <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${address}, ${nameOf(areas.find((a) => a.id === job.area_id), 'en')}, Lahore`)}`} target="_blank" rel="noreferrer"
+          className="min-h-12 rounded-xl border-2 border-brand text-brand font-bold inline-flex items-center justify-center gap-2 hover:bg-brand-subtle"><Navigation className="size-5" aria-hidden />{t('openMap')}</a>
+      )}
       {accepted && <div className="rounded-xl bg-brand-subtle px-4 py-3 flex items-center justify-between gap-3"><div><div className="font-bold text-brand-hover">{t('agreedPrice')}</div><div className="text-sm text-ink-2">{t('cashAfter')} · {accepted.includes_parts ? t('withParts') : t('visitLabour')}</div></div><div className="en text-2xl font-extrabold whitespace-nowrap">Rs {accepted.amount_pkr.toLocaleString('en-PK')}</div></div>}
     </Card>
   )
@@ -210,7 +239,7 @@ export default function JobPage() {
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto"><TopBar title={nameOf(categories.find((c) => c.id === job.category_id), lang)} /></div>
+      <div className="max-w-6xl mx-auto"><TopBar title={`${nameOf(categories.find((c) => c.id === job.category_id), lang)} · ${bookingNo}`} /></div>
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-8 items-start">
         <aside className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
           {hasNext && (t(nextKey) !== nextKey) && (

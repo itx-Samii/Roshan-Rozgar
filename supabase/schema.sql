@@ -361,3 +361,23 @@ end $$;
 
 revoke execute on function public.search_workers, public.create_job_request from public, anon;
 grant execute on function public.search_workers, public.create_job_request to authenticated;
+
+-- ============ Migration 3: profile edits keep the worker's chosen availability ============
+create or replace function public.complete_onboarding(p_name text, p_years int, p_fee int, p_categories smallint[], p_areas smallint[]) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'worker') then raise exception 'FORBIDDEN'; end if;
+  if coalesce(array_length(p_categories,1),0) not between 1 and 6 or coalesce(array_length(p_areas,1),0) not between 1 and 10
+     or char_length(trim(coalesce(p_name,''))) not between 1 and 80 then
+    raise exception 'VALIDATION_FAILED'; end if;
+  update public.profiles set display_name = trim(p_name) where id = auth.uid();
+  -- first-time onboarding makes the worker available; later edits keep their chosen status
+  update public.worker_profiles set years_experience = p_years, visit_fee_from = p_fee,
+    manual_availability = case when onboarded_at is null then 'available' else manual_availability end,
+    onboarded_at = coalesce(onboarded_at, now())
+  where user_id = auth.uid();
+  delete from public.worker_services where worker_id = auth.uid();
+  insert into public.worker_services select auth.uid(), unnest(p_categories);
+  delete from public.worker_areas where worker_id = auth.uid();
+  insert into public.worker_areas select auth.uid(), unnest(p_areas);
+end $$;
