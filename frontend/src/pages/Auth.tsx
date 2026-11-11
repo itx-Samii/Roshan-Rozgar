@@ -48,7 +48,12 @@ export default function Auth() {
       : await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (res.error) { const code = errorCode(res.error); setUnconfirmed(code === 'EMAIL_NOT_CONFIRMED'); setError(tErr(t, code)) }
-    else if (mode === 'up' && !res.data.session) setSentTo(email) // confirmation required: wait for the email link
+    else if (mode === 'up' && !res.data.session) {
+      // Supabase answers a sign-up for an already-registered email with a user that has no identities
+      // and sends NO email (so addresses can't be probed). Tell the user to sign in instead of waiting.
+      if (res.data.user && (res.data.user.identities?.length ?? 0) === 0) { setMode('in'); setError(t('err_EMAIL_TAKEN')) }
+      else setSentTo(email) // confirmation required: wait for the code or link
+    }
   }
   const resend = async (to: string) => {
     setBusy(true); setError(null)
