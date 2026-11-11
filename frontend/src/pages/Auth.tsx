@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { MailCheck } from 'lucide-react'
+import { KeyRound, MailCheck } from 'lucide-react'
 import { Alert, Button, LangSwitch, Logo, Screen, TopBar } from '../components/ui'
 import { useI18n, tErr } from '../lib/i18n'
-import { supabase, rpc, errorCode } from '../lib/supabase'
+import { supabase, rpc, errorCode, recovery } from '../lib/supabase'
 import { useAuth, useProfile } from '../lib/auth'
 
 const field = 'w-full min-h-14 rounded-xl border border-line-strong bg-surface px-4 text-base'
@@ -16,10 +16,11 @@ export default function Auth() {
   const { session } = useAuth()
   const profile = useProfile()
   const qc = useQueryClient()
-  const [mode, setMode] = useState<'in' | 'up'>(wantRole ? 'up' : 'in')
+  const [mode, setMode] = useState<'in' | 'up' | 'forgot'>(wantRole ? 'up' : 'in')
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('')
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null)
-  const [sentTo, setSentTo] = useState<string | null>(null); const [code, setCode] = useState(''); const [unconfirmed, setUnconfirmed] = useState(false); const [resent, setResent] = useState(false)
+  const [sentTo, setSentTo] = useState<string | null>(null); const [code, setCode] = useState('');
+  const [resetTo, setResetTo] = useState<string | null>(null); const [newPass, setNewPass] = useState(''); const [newPass2, setNewPass2] = useState(''); const [unconfirmed, setUnconfirmed] = useState(false); const [resent, setResent] = useState(false)
 
   // Signed in: pick role once, then route by role
   if (session && profile.data) {
@@ -74,6 +75,75 @@ export default function Auth() {
     else { setSentTo(null); setCode(''); await qc.invalidateQueries({ queryKey: ['profile'] }) } // signed in → role choice / home
   }
 
+  // Forgot password: email → 6-digit code (or link) → new password
+  const sendReset = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setError(null); setResent(false)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirect })
+    setBusy(false)
+    if (err) setError(tErr(t, errorCode(err)))
+    else { setResetTo(email); setCode(''); setNewPass(''); setNewPass2('') } // Supabase doesn't say whether the email exists
+  }
+  const finishReset = async (e: FormEvent) => {
+    e.preventDefault(); if (!resetTo) return
+    setError(null)
+    if (newPass !== newPass2) { setError(t('passwordsDontMatch')); return }
+    setBusy(true)
+    const err = await recovery.inline(async () => {
+      const v = await supabase.auth.verifyOtp({ email: resetTo, token: code.replace(/\D/g, ''), type: 'recovery' })
+      if (v.error) return v.error
+      const u = await supabase.auth.updateUser({ password: newPass })
+      return u.error
+    })
+    setBusy(false)
+    if (err) { setError(tErr(t, errorCode(err))); return }
+    setResetTo(null); setMode('in')
+    await qc.invalidateQueries({ queryKey: ['profile'] }) // signed in with the new password → home
+  }
+
+  if (resetTo) return (
+    <Screen>
+      <TopBar title={t('resetTitle')} end={<LangSwitch />} />
+      <div className="flex flex-col items-center text-center gap-3 pt-4">
+        <span className="size-20 rounded-full bg-brand-subtle text-brand grid place-items-center"><MailCheck className="size-10" aria-hidden /></span>
+        <h1 className="text-2xl font-extrabold">{t('checkEmailTitle')}</h1>
+        <p className="font-bold en" dir="ltr">{resetTo}</p>
+        <p className="text-ink-2">{t('resetSentNote')}</p>
+      </div>
+      <form onSubmit={finishReset} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-2 font-semibold">{t('codeLabel')}
+          <input className={`${field} en text-center text-2xl tracking-[0.5em] font-bold`} dir="ltr" inputMode="numeric" autoComplete="one-time-code"
+            pattern="[0-9 ]*" maxLength={12} value={code} onChange={(e) => setCode(e.target.value)} placeholder="••••••" /></label>
+        <label className="flex flex-col gap-2 font-semibold">{t('newPassword')}
+          <input className={`${field} en`} dir="ltr" type="password" required minLength={8} autoComplete="new-password" value={newPass} onChange={(e) => setNewPass(e.target.value)} /></label>
+        <label className="flex flex-col gap-2 font-semibold">{t('confirmPassword')}
+          <input className={`${field} en`} dir="ltr" type="password" required minLength={8} autoComplete="new-password" value={newPass2} onChange={(e) => setNewPass2(e.target.value)} /></label>
+        {error && <Alert>{error}</Alert>}
+        {resent && <Alert kind="success">{t('resent')}</Alert>}
+        <Button type="submit" loading={busy} disabled={code.replace(/\D/g, '').length < 6 || newPass.length < 8}>{t('savePassword')}</Button>
+      </form>
+      <p className="text-center text-ink-2">{t('resetOrLink')}</p>
+      <Button variant="secondary" disabled={busy} onClick={async () => { setBusy(true); const { error: err } = await supabase.auth.resetPasswordForEmail(resetTo, { redirectTo: redirect }); setBusy(false); if (err) setError(tErr(t, errorCode(err))); else setResent(true) }}>{t('resend')}</Button>
+      <Button variant="tertiary" onClick={() => { setResetTo(null); setMode('in'); setError(null) }}>{t('signIn')}</Button>
+    </Screen>
+  )
+
+  if (mode === 'forgot') return (
+    <Screen>
+      <TopBar title={t('resetTitle')} end={<LangSwitch />} />
+      <div className="flex flex-col items-center text-center gap-3 pt-4">
+        <span className="size-20 rounded-full bg-brand-subtle text-brand grid place-items-center"><KeyRound className="size-10" aria-hidden /></span>
+        <h1 className="text-2xl font-extrabold">{t('resetTitle')}</h1>
+        <p className="text-ink-2">{t('resetSub')}</p>
+      </div>
+      <form onSubmit={sendReset} className="flex flex-col gap-4">
+        <label className="flex flex-col gap-2 font-semibold">{t('email')}<input className={`${field} en`} dir="ltr" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+        {error && <Alert>{error}</Alert>}
+        <Button type="submit" loading={busy}>{t('sendCode')}</Button>
+      </form>
+      <Button variant="tertiary" onClick={() => { setMode('in'); setError(null) }}>{t('signIn')}</Button>
+    </Screen>
+  )
+
   if (sentTo) return (
     <Screen>
       <TopBar title={t('checkEmailTitle')} end={<LangSwitch />} />
@@ -110,6 +180,7 @@ export default function Auth() {
         <label className="flex flex-col gap-2 font-semibold">{t('password')}<input className={`${field} en`} dir="ltr" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'up' ? 'new-password' : 'current-password'} /></label>
         <Button type="submit" loading={busy}>{mode === 'up' ? t('signUp') : t('signIn')}</Button>
       </form>
+      {mode === 'in' && <button type="button" onClick={() => { setMode('forgot'); setError(null) }} className="self-center min-h-11 px-3 font-semibold text-brand underline">{t('forgotPassword')}</button>}
       <Button variant="tertiary" onClick={() => setMode(mode === 'up' ? 'in' : 'up')}>{mode === 'up' ? t('haveAccount') : t('noAccount')}</Button>
     </Screen>
   )

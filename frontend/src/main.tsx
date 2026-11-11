@@ -1,11 +1,11 @@
-import { StrictMode, type ReactNode } from 'react'
+import { StrictMode, useSyncExternalStore, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import { I18nProvider, useI18n } from './lib/i18n'
 import { AuthProvider, useAuth, useProfile } from './lib/auth'
-import { configMissing } from './lib/supabase'
+import { configMissing, recovery } from './lib/supabase'
 import { Alert, Spinner } from './components/ui'
 import { NotifyProvider } from './components/notify'
 import Landing from './pages/Landing'
@@ -16,6 +16,7 @@ import CustomerHome from './pages/CustomerHome'
 import WorkerList from './pages/WorkerList'
 import RequestWorker from './pages/RequestWorker'
 import JobPage from './pages/JobPage'
+import NewPassword from './pages/NewPassword'
 import WorkerRequests from './pages/WorkerRequests'
 import JobsList from './pages/JobsList'
 import Profile from './pages/Profile'
@@ -43,12 +44,14 @@ function Home() {
 
 function App() {
   const { t } = useI18n()
+  // Opened the password-reset link: set a new password before anything else
+  const recovering = useSyncExternalStore(recovery.subscribe, () => recovery.pending)
   if (configMissing) return <div className="p-6 max-w-xl mx-auto"><Alert>{t('configMissing')}</Alert></div>
   return (
     <AuthProvider>
       <BrowserRouter>
         <NotifyProvider>
-        <Routes>
+        {recovering ? <NewPassword /> : <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/w" element={<Guard role="worker"><WorkerHome /></Guard>} />
@@ -63,7 +66,7 @@ function App() {
           <Route path="/c/worker/:id" element={<Guard role="customer"><RequestWorker /></Guard>} />
           <Route path="/job/:id" element={<Guard><JobPage /></Guard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        </Routes>}
         </NotifyProvider>
       </BrowserRouter>
     </AuthProvider>
